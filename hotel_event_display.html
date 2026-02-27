@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Charleston Events - Hotel Display</title>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Event Info Card */
+        .event-info-card {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 450px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.5s ease;
+        }
+
+        .event-info-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .event-info-card h2 {
+            margin: 0 0 8px 0;
+            font-size: 28px;
+            color: #1a1a1a;
+            font-weight: 600;
+        }
+
+        .event-info-card .venue-name {
+            font-size: 20px;
+            color: #666;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .event-info-card .detail-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .event-info-card .detail-row .icon {
+            font-size: 20px;
+            margin-right: 12px;
+            width: 24px;
+            text-align: center;
+        }
+
+        .event-info-card .description {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            font-size: 15px;
+            line-height: 1.6;
+            color: #555;
+        }
+
+        .event-info-card .category-tag {
+            display: inline-block;
+            background: #6b6b6b;
+            color: #ffffff;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 15px;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            color: white;
+        }
+
+        .loading-screen .loading-logo {
+            position: absolute;
+            top: 20px;
+            left: 36px;
+            max-height: 90px;
+            max-width: 375px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.2);
+            border-top: 5px solid #00ff88;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div class="loading-screen" id="loading">
+        <img src="barglance-logo.png" alt="BarGlance" class="loading-logo" />
+        <div class="loading-spinner"></div>
+        <div>Loading Charleston Events...</div>
+    </div>
+
+    <div class="event-info-card" id="eventCard">
+        <h2 id="eventTitle">Event Title</h2>
+        <div class="venue-name" id="venueName">Venue Name</div>
+
+        <div class="detail-row">
+            <span class="icon">📅</span>
+            <span id="eventDate">Date</span>
+        </div>
+
+        <div class="detail-row">
+            <span class="icon">🕐</span>
+            <span id="eventTime">Time</span>
+        </div>
+
+        <div class="detail-row">
+            <span class="icon">📍</span>
+            <span id="venueAddress">Address</span>
+        </div>
+
+        <div class="detail-row" id="distanceRow">
+            <span class="icon">🗺️</span>
+            <span id="venueDistance">—</span>
+        </div>
+
+        <div class="detail-row" id="coverChargeRow" style="display: none;">
+            <span class="icon">💵</span>
+            <span id="coverCharge">Cover</span>
+        </div>
+
+        <div class="description" id="eventDescription" style="display: none;">
+            Description goes here
+        </div>
+
+        <div class="category-tag" id="eventCategory">Category</div>
+    </div>
+
+    <script>
+        let map;
+        let events = [];
+        let currentEventIndex = 0;
+        let cycleInterval;
+        let cardUpdateTimeout;
+        let cardShowTimeout;
+        const CYCLE_DURATION = 12000; // 12 seconds per event
+        const CARD_HIDE_DELAY = 250;
+        const CARD_SHOW_DELAY = 200;
+
+        // Reference location for distance (e.g. hotel); change to your lat/lng and label
+        const REFERENCE_LOCATION = {
+            lat: 32.7765,
+            lng: -79.9311,
+            label: 'Downtown Charleston'
+        };
+
+        function distanceMiles(lat1, lon1, lat2, lon2) {
+            const R = 3959; // Earth radius in miles
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        // Initialize map
+        mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN'; // Get a token at https://account.mapbox.com/access-tokens/
+
+        map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/dark-v11',
+            center: [-79.9311, 32.7765], // Charleston, SC
+            zoom: 14,
+            pitch: 60,
+            bearing: -20,
+            antialias: true
+        });
+
+        map.on('load', async () => {
+            // Add 3D terrain
+            map.addSource('mapbox-dem', {
+                'type': 'raster-dem',
+                'url': 'mapbox://mapbox.mapbox-terrain-dem-v1',
+                'tileSize': 512,
+                'maxzoom': 14
+            });
+            map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1.5 });
+
+            // Find first symbol layer
+            const layers = map.getStyle().layers;
+            let firstSymbolId;
+            for (let i = 0; i < layers.length; i++) {
+                if (layers[i].type === 'symbol') {
+                    firstSymbolId = layers[i].id;
+                    break;
+                }
+            }
+
+            // Add 3D buildings
+            map.addLayer({
+                'id': '3d-buildings',
+                'source': 'composite',
+                'source-layer': 'building',
+                'filter': ['==', 'extrude', 'true'],
+                'type': 'fill-extrusion',
+                'minzoom': 13,
+                'paint': {
+                    'fill-extrusion-color': [
+                        'case',
+                        ['>', ['get', 'height'], 100],
+                        ['interpolate', ['linear'], ['get', 'height'], 100, '#d0e8f2', 150, '#a8d5e2', 200, '#7ec8e3'],
+                        ['>', ['get', 'height'], 40],
+                        ['match', ['%', ['to-number', ['id']], 5], 0, '#ffffff', 1, '#f5f5f5', 2, '#e8f4f8', 3, '#fff8f0', 4, '#f0f0f0', '#ffffff'],
+                        ['match', ['%', ['to-number', ['id']], 6], 0, '#ffffff', 1, '#f8f8f8', 2, '#e3f2fd', 3, '#fff3e0', 4, '#f1f8e9', 5, '#e8e8e8', '#ffffff']
+                    ],
+                    'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.05, ['get', 'height']],
+                    'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.05, ['get', 'min_height']],
+                    'fill-extrusion-opacity': 0.92,
+                    'fill-extrusion-ambient-occlusion-intensity': 0.8,
+                    'fill-extrusion-ambient-occlusion-radius': 5,
+                    'fill-extrusion-vertical-gradient': true
+                }
+            }, firstSymbolId);
+
+            // Add sky
+            map.addLayer({
+                'id': 'sky',
+                'type': 'sky',
+                'paint': {
+                    'sky-type': 'atmosphere',
+                    'sky-atmosphere-sun': [0.0, 90.0],
+                    'sky-atmosphere-sun-intensity': 15
+                }
+            });
+
+            // Single location: venue name as label only (no icon); other business labels stay off
+            map.addSource('events-source', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            });
+            map.addLayer({
+                id: 'event-label',
+                type: 'symbol',
+                source: 'events-source',
+                filter: ['==', ['get', 'index'], -1],
+                layout: {
+                    'text-field': ['get', 'venue_name'],
+                    'text-size': 22,
+                    'text-anchor': 'bottom',
+                    'text-offset': [0, -0.4],
+                    'text-allow-overlap': true
+                },
+                paint: {
+                    'text-color': '#1a1a1a',
+                    'text-halo-color': 'rgba(0, 255, 136, 0.8)',
+                    'text-halo-width': 2.5,
+                    'text-halo-blur': 0.5
+                }
+            }, 'sky');
+
+            // Hide POIs and enhance labels (street/city labels stay on)
+            const style = map.getStyle();
+            style.layers.forEach((layer) => {
+                if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
+                    const layerId = layer.id.toLowerCase();
+                    if (layerId === 'event-label') return; // keep our venue label styling (white text, green halo)
+
+                    if (layerId.includes('poi') && !layerId.includes('park')) {
+                        map.setLayoutProperty(layer.id, 'visibility', 'none');
+                        return;
+                    }
+                    if (layerId.includes('transit')) {
+                        map.setLayoutProperty(layer.id, 'visibility', 'none');
+                        return;
+                    }
+                    if (layerId.includes('building') && layerId.includes('number')) {
+                        map.setLayoutProperty(layer.id, 'visibility', 'none');
+                        return;
+                    }
+
+                    map.setPaintProperty(layer.id, 'text-halo-color', '#ffffff');
+                    map.setPaintProperty(layer.id, 'text-halo-width', 2);
+                    map.setPaintProperty(layer.id, 'text-halo-blur', 1);
+                    map.setPaintProperty(layer.id, 'text-color', '#000000');
+                }
+            });
+
+            loadEvents().then(() => {
+                hideLoading();
+                if (events.length > 0) {
+                    showEvent(0);
+                    startCycling();
+                }
+            });
+        });
+
+        // Add navigation controls
+        map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+        async function loadEvents() {
+            try {
+                console.log('Fetching events from BarGlance API...');
+
+                // Fetch events for Charleston, SC
+                const response = await fetch('https://partner-api.barglance.com/api/v1/partner/events/SC/Charleston', {
+                    headers: {
+                        'Authorization': 'Bearer e6514910439dd4e729579de341e9f6d6cfc05bad'
+                    }
+                });
+
+                const data = await response.json();
+                console.log('Raw API response:', data);
+
+                if (data.events && data.events.length > 0) {
+                    // Filter out only events that have ended (show upcoming + ongoing)
+                    const now = new Date();
+                    const upcomingEvents = data.events.filter(event => {
+                        const endTime = event.end_at ? new Date(event.end_at) : null;
+                        if (endTime && !Number.isNaN(endTime.getTime()))
+                            return endTime >= now; // still going or hasn't started
+                        return new Date(event.start_at) >= now; // no end time: show if start in future
+                    });
+
+                    // One event per venue per day (stops same event/venue flashing multiple times)
+                    const seen = new Set();
+                    events = upcomingEvents.filter(event => {
+                        const venueId = event.bar?.id ?? event.bar?.name ?? '';
+                        const start = new Date(event.start_at);
+                        const dayKey = Number.isNaN(start.getTime()) ? '' : `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, '0')}-${String(start.getUTCDate()).padStart(2, '0')}`;
+                        const uniqueKey = `${venueId}-${dayKey}`.trim() || event.id || `${event.title}-${event.start_at}`;
+
+                        if (!uniqueKey || seen.has(uniqueKey)) {
+                            if (uniqueKey) console.log('Duplicate event filtered (same venue/day):', event.title);
+                            return false;
+                        }
+                        seen.add(uniqueKey);
+                        return true;
+                    });
+
+                    // Keep order stable for a smoother, predictable rotation
+                    events.sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
+
+                    console.log(`Loaded ${events.length} unique upcoming events (filtered from ${upcomingEvents.length} total)`);
+
+                    updateEventsLayer();
+                } else {
+                    events = [];
+                    console.log('No events found');
+                    updateEventsLayer();
+                }
+            } catch (error) {
+                console.error('Failed to load events:', error);
+            }
+        }
+
+        function updateEventsLayer() {
+            const source = map.getSource('events-source');
+            if (!source) return;
+
+            const features = events
+                .map((event, index) => {
+                    const lat = Number(event?.bar?.latitude);
+                    const lng = Number(event?.bar?.longitude);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+                    return {
+                        type: 'Feature',
+                        geometry: { type: 'Point', coordinates: [lng, lat] },
+                        properties: { index, venue_name: event.bar?.name || 'Venue' }
+                    };
+                })
+                .filter(Boolean);
+
+            source.setData({ type: 'FeatureCollection', features });
+            setActiveEventFilter(currentEventIndex);
+            console.log(`Updated events layer with ${features.length} locations`);
+        }
+
+        function setActiveEventFilter(index) {
+            if (!map.getLayer('event-label')) return;
+            map.setFilter('event-label', ['==', ['get', 'index'], index]);
+        }
+
+        function showEvent(index) {
+            if (events.length === 0) return;
+
+            currentEventIndex = index;
+            const event = events[index];
+            if (!event) return;
+
+            console.log('Showing event:', event.title);
+
+            clearTimeout(cardUpdateTimeout);
+            clearTimeout(cardShowTimeout);
+
+            // Hide card first to ensure clean transition
+            const card = document.getElementById('eventCard');
+            card.classList.remove('visible');
+
+            setActiveEventFilter(index);
+
+            // Fly to event location
+            const latitude = Number(event?.bar?.latitude);
+            const longitude = Number(event?.bar?.longitude);
+            if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+                map.flyTo({
+                    center: [longitude, latitude],
+                    zoom: 16.5,
+                    pitch: 60,
+                    bearing: -20,
+                    offset: [320, 0],
+                    duration: 1800,
+                    essential: true
+                });
+            }
+
+            // Deterministic card timing prevents random flashes/overlaps
+            cardUpdateTimeout = setTimeout(() => {
+                updateInfoCard(event);
+                cardShowTimeout = setTimeout(() => {
+                    card.classList.add('visible');
+                }, CARD_SHOW_DELAY);
+            }, CARD_HIDE_DELAY);
+        }
+
+        function updateInfoCard(event) {
+            const card = document.getElementById('eventCard');
+            const venue = event.bar || {};
+
+            // Event title
+            document.getElementById('eventTitle').textContent = event.title || 'Event';
+
+            // Venue name
+            document.getElementById('venueName').textContent = venue.name || 'Venue';
+
+            // Date
+            const eventDate = new Date(event.start_at);
+            const hasValidDate = !Number.isNaN(eventDate.getTime());
+            const dateStr = hasValidDate
+                ? eventDate.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric'
+                })
+                : 'Date TBD';
+            document.getElementById('eventDate').textContent = dateStr;
+
+            // Time: specific times, "All day", "Through [date]", or start time only (use API strings; support start_at or startAt)
+            let timeStr = 'Time TBD';
+            const startAtRaw = event.start_at ?? event.startAt ?? '';
+            const endAtRaw = event.end_at ?? event.endAt ?? '';
+            if (hasValidDate) {
+                const startAt = String(startAtRaw);
+                const endAt = String(endAtRaw);
+                const startDate = eventDate;
+                const endDate = endAt ? new Date(endAt) : null;
+                const startDateStr = startAt.slice(0, 10);
+                const endDateStr = endAt.slice(0, 10);
+                const isSameDay = endDateStr && startDateStr === endDateStr;
+                const isMidnightStart = startAt.includes('T00:00');
+                const isEndOfDay = endAt.includes('T23:59');
+
+                if (endAt && endDate && !Number.isNaN(endDate.getTime()) && !isSameDay) {
+                    timeStr = 'Through ' + endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: endDate.getFullYear() !== startDate.getFullYear() ? 'numeric' : undefined });
+                } else if (isSameDay && isMidnightStart && (!endAt || isEndOfDay)) {
+                    timeStr = 'All day';
+                } else if (!endAt) {
+                    timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                } else if (isSameDay && isEndOfDay && !isMidnightStart) {
+                    // End is 23:59 placeholder (no real end time from API) — show start time only
+                    timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                } else {
+                    timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) +
+                        ' – ' + endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                }
+            }
+            document.getElementById('eventTime').textContent = timeStr;
+
+            // Address
+            document.getElementById('venueAddress').textContent = venue.address || 'Address not available';
+
+            // Distance from reference location
+            const venueLat = Number(venue.latitude);
+            const venueLng = Number(venue.longitude);
+            const distanceRow = document.getElementById('distanceRow');
+            const distanceEl = document.getElementById('venueDistance');
+            if (Number.isFinite(venueLat) && Number.isFinite(venueLng)) {
+                const mi = distanceMiles(REFERENCE_LOCATION.lat, REFERENCE_LOCATION.lng, venueLat, venueLng);
+                const miStr = mi < 0.1 ? '< 0.1' : mi.toFixed(1);
+                distanceEl.textContent = REFERENCE_LOCATION.label
+                    ? `${miStr} mi from ${REFERENCE_LOCATION.label}`
+                    : `${miStr} mi away`;
+                distanceRow.style.display = 'flex';
+            } else {
+                distanceRow.style.display = 'none';
+            }
+
+            // Cover charge
+            const coverRow = document.getElementById('coverChargeRow');
+            const coverCharge = document.getElementById('coverCharge');
+            if (event.cover_charge || event.price) {
+                coverRow.style.display = 'flex';
+                coverCharge.textContent = event.cover_charge || event.price;
+            } else {
+                coverRow.style.display = 'none';
+            }
+
+            // Description
+            const descEl = document.getElementById('eventDescription');
+            if (event.description) {
+                descEl.style.display = 'block';
+                descEl.textContent = event.description;
+            } else {
+                descEl.style.display = 'none';
+            }
+
+            // Category
+            const categoryEl = document.getElementById('eventCategory');
+            if (event.classification) {
+                categoryEl.textContent = event.classification.replace(/_/g, ' ').toUpperCase();
+            } else {
+                categoryEl.textContent = 'EVENT';
+            }
+        }
+
+        function startCycling() {
+            clearInterval(cycleInterval);
+            if (events.length <= 1) return;
+            cycleInterval = setInterval(() => {
+                // Move to next event (showEvent handles hiding/showing card)
+                const nextIndex = (currentEventIndex + 1) % events.length;
+                showEvent(nextIndex);
+            }, CYCLE_DURATION);
+        }
+
+        function hideLoading() {
+            const loading = document.getElementById('loading');
+            loading.style.display = 'none';
+        }
+
+        // Auto-refresh every 5 minutes to filter out past events
+        setInterval(async () => {
+            console.log('Auto-refreshing events...');
+            await loadEvents();
+
+            if (events.length === 0) {
+                clearInterval(cycleInterval);
+                document.getElementById('eventCard').classList.remove('visible');
+                return;
+            }
+
+            // Keep the current index in range, then re-sync card and map layer
+            if (currentEventIndex >= events.length) {
+                currentEventIndex = 0;
+            }
+            showEvent(currentEventIndex);
+            startCycling();
+        }, 5 * 60 * 1000); // 5 minutes
+    </script>
+</body>
+</html>

@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BarGlance Social Map - WORKING VERSION</title>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 20px;
+            min-width: 280px;
+            z-index: 1000;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-panel h3 {
+            margin: 0 0 15px 0;
+            color: #00ff88;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #ccc;
+        }
+
+        .slider {
+            width: 100%;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #00ff88;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+
+        .status-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            padding: 12px;
+            z-index: 1000;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            min-width: 200px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        .status-value {
+            color: #00ff88;
+            font-weight: 500;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            padding: 15px;
+            z-index: 1000;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+        }
+
+        .venue-popup {
+            background: rgba(0, 0, 0, 0.95);
+            border-radius: 8px;
+            padding: 15px;
+            max-width: 300px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .venue-popup h4 {
+            margin: 0 0 10px 0;
+            color: #00ff88;
+        }
+
+        .venue-popup .metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .venue-popup .occupancy-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+
+        .venue-popup .occupancy-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, #ffaa00, #00ff88);
+            border-radius: 4px;
+        }
+
+        /* Fix Mapbox popup positioning */
+        .mapboxgl-popup {
+            max-width: 400px !important;
+        }
+
+        .mapboxgl-popup-content {
+            background: rgba(0, 0, 0, 0.95) !important;
+            border-radius: 8px !important;
+            padding: 0 !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        .mapboxgl-popup-close-button {
+            color: #00ff88 !important;
+            font-size: 20px !important;
+            padding: 5px 10px !important;
+        }
+
+        .mapboxgl-popup-close-button:hover {
+            background: rgba(0, 255, 136, 0.1) !important;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            z-index: 2000;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid #00ff88;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(45deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div class="loading" id="loading">
+        <div class="loading-spinner"></div>
+        <div>Loading Social Data...</div>
+    </div>
+
+    <div class="control-panel">
+        <h3>🎯 Social Activity Map</h3>
+
+        <div class="control-group">
+            <label>Occupancy Threshold: <span id="occupancy-threshold">1</span></label>
+            <input type="range" class="slider" id="occupancy-slider" min="0" max="10" value="1">
+        </div>
+
+        <div class="control-group">
+            <label>Visualization Scale: <span id="scale-value">1.0x</span></label>
+            <input type="range" class="slider" id="scale-slider" min="0.5" max="3" step="0.1" value="1">
+        </div>
+
+        <div class="control-group">
+            <label>Activity Filter</label>
+            <select id="category-filter" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: white;">
+                <option value="all">All Categories</option>
+                <option value="Nightclub">Nightclubs</option>
+                <option value="Sports">Sports Bars</option>
+                <option value="Live Music">Live Music</option>
+                <option value="Pub">Pubs</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="real-time-toggle" checked> Real-time Updates
+            </label>
+        </div>
+
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="event-mode-toggle"> Show Events
+            </label>
+        </div>
+
+        <button onclick="focusOnHotspots()" style="width: 100%; padding: 10px; background: rgba(0, 255, 136, 0.2); border: 1px solid #00ff88; border-radius: 4px; color: #00ff88; cursor: pointer; margin-top: 10px;">🎯 Focus on Hotspots</button>
+    </div>
+
+    <div class="status-indicator">
+        <div class="status-item">
+            <span>Venues Loaded:</span>
+            <span class="status-value" id="venues-count">0</span>
+        </div>
+        <div class="status-item">
+            <span>Active Venues:</span>
+            <span class="status-value" id="active-count">0</span>
+        </div>
+        <div class="status-item">
+            <span>Last Update:</span>
+            <span class="status-value" id="last-update">-</span>
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ff4444; box-shadow: 0 0 8px #ff4444;"></div>
+            <span>Low Activity (0-3)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ffaa00; box-shadow: 0 0 8px #ffaa00;"></div>
+            <span>Medium (4-6)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #00ff88; box-shadow: 0 0 8px #00ff88;"></div>
+            <span>High Activity (7-10)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #4444ff; box-shadow: 0 0 8px #4444ff;"></div>
+            <span>Peak Hours</span>
+        </div>
+    </div>
+
+    <script>
+        class SocialMapVisualization {
+            constructor() {
+                this.map = null;
+                this.venues = [];
+                this.events = [];
+                this.markers = [];
+                this.occupancyThreshold = 1;
+                this.scale = 1.0;
+                this.categoryFilter = 'all';
+                this.realTimeEnabled = true;
+                this.eventModeEnabled = false;
+                this.lastUpdate = null;
+                this.mapLoaded = false;
+
+                this.init();
+            }
+
+            // Parse PostGIS POINT string to [lng, lat]
+            parseLocation(locationString) {
+                if (!locationString) return null;
+
+                // Format: "POINT (longitude latitude)" or "POINT (longitude, latitude)"
+                // Handle both space-separated and comma-separated formats
+                const match = locationString.match(/POINT\s*\(\s*(-?\d+\.?\d*)\s*,?\s*(-?\d+\.?\d*)\s*\)/);
+                if (match) {
+                    const parsed = {
+                        longitude: parseFloat(match[1]),
+                        latitude: parseFloat(match[2])
+                    };
+
+                    // DEBUG: Log every parsed coordinate to identify issues
+                    console.log(`PARSE: "${locationString}" -> lng: ${parsed.longitude}, lat: ${parsed.latitude}`);
+
+                    return parsed;
+                }
+
+                // Log parsing failures
+                console.warn('Failed to parse location:', locationString);
+                return null;
+            }
+
+            async init() {
+                // Load data FIRST, independently of map
+                await this.loadBarGlanceData();
+                await this.loadEventsData();
+
+                // Then try to initialize map
+                try {
+                    await this.initializeMap();
+                    this.mapLoaded = true;
+                } catch (error) {
+                    console.error('Map initialization failed:', error);
+                    // Continue without map - we still have the data
+                }
+
+                this.setupControls();
+                this.startRealTimeUpdates();
+                this.hideLoading();
+
+                // Render venues if we have a working map
+                if (this.mapLoaded) {
+                    this.renderVenues();
+                }
+            }
+
+            async initializeMap() {
+                return new Promise((resolve, reject) => {
+                    try {
+                        // Get your free token from: https://account.mapbox.com/access-tokens/
+                        mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN'; // Get a token at https://account.mapbox.com/access-tokens/
+
+                        this.map = new mapboxgl.Map({
+                            container: 'map',
+                            style: 'mapbox://styles/mapbox/dark-v11',
+                            center: [-98.5795, 39.8283], // Center of US
+                            zoom: 4.5, // Slightly zoomed in
+                            pitch: 45,
+                            bearing: 0,
+                            antialias: true
+                        });
+
+                        this.map.on('load', () => {
+                            // Add 3D buildings
+                            this.map.addLayer({
+                                'id': '3d-buildings',
+                                'source': 'composite',
+                                'source-layer': 'building',
+                                'filter': ['==', 'extrude', 'true'],
+                                'type': 'fill-extrusion',
+                                'minzoom': 15,
+                                'paint': {
+                                    'fill-extrusion-color': '#aaa',
+                                    'fill-extrusion-height': [
+                                        'interpolate',
+                                        ['linear'],
+                                        ['zoom'],
+                                        15, 0,
+                                        15.05, ['get', 'height']
+                                    ],
+                                    'fill-extrusion-base': [
+                                        'interpolate',
+                                        ['linear'],
+                                        ['zoom'],
+                                        15, 0,
+                                        15.05, ['get', 'min_height']
+                                    ],
+                                    'fill-extrusion-opacity': 0.6
+                                }
+                            });
+
+                            console.log('Map loaded, rendering venues...');
+                            // Render venues immediately after map loads
+                            this.renderVenues();
+
+                            // Auto-fit map to show all venues
+                            setTimeout(() => this.fitMapToVenues(), 1000);
+
+                            resolve();
+                        });
+
+                        this.map.on('error', (e) => {
+                            reject(new Error(`Mapbox error: ${e.error.message}`));
+                        });
+
+                        // Timeout after 10 seconds
+                        setTimeout(() => {
+                            reject(new Error('Map initialization timeout'));
+                        }, 10000);
+
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            }
+
+            async loadBarGlanceData() {
+                try {
+                    console.log('Fetching BarGlance data...');
+                    const response = await fetch('https://partner-api.barglance.com/api/v1/partner/bars', {
+                        headers: {
+                            'Authorization': 'Bearer e6514910439dd4e729579de341e9f6d6cfc05bad'
+                        }
+                    });
+
+                    const data = await response.json();
+                    this.venues = data.bars || [];
+                    this.updateVenueCount();
+
+                    console.log(`Loaded ${this.venues.length} venues`);
+                    if (this.venues.length > 0) {
+                        console.log('Sample venue with all fields:', this.venues[0]);
+
+                        // Check for event data in all venues
+                        const venuesWithEvents = this.venues.filter(v =>
+                            v.events || v.upcoming_events || v.event || v.current_event || v.event_list
+                        );
+
+                        if (venuesWithEvents.length > 0) {
+                            console.log(`Found ${venuesWithEvents.length} venues with event data`);
+                            console.log('Sample venue with events:', venuesWithEvents[0]);
+                            console.log('Event fields:', {
+                                events: venuesWithEvents[0].events,
+                                upcoming_events: venuesWithEvents[0].upcoming_events,
+                                event: venuesWithEvents[0].event,
+                                current_event: venuesWithEvents[0].current_event,
+                                event_list: venuesWithEvents[0].event_list
+                            });
+                        } else {
+                            console.log('No venues found with event data. Checking all field names...');
+                            const allKeys = Object.keys(this.venues[0]);
+                            console.log('Available venue fields:', allKeys);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to load BarGlance data:', error);
+                }
+            }
+
+            async loadEventsData() {
+                try {
+                    console.log('Fetching events data...');
+
+                    // Get unique cities from venues
+                    const cities = new Map();
+                    this.venues.forEach(venue => {
+                        if (venue.city && venue.city.name && venue.city.state) {
+                            const key = `${venue.city.state}/${venue.city.name}`;
+                            cities.set(key, { state: venue.city.state, name: venue.city.name });
+                        }
+                    });
+
+                    console.log(`Fetching events for ${cities.size} cities...`);
+
+                    // Fetch events for all cities in parallel
+                    const eventPromises = Array.from(cities.values()).map(async (city) => {
+                        try {
+                            const url = `https://partner-api.barglance.com/api/v1/partner/events/${city.state}/${encodeURIComponent(city.name)}`;
+                            const response = await fetch(url, {
+                                headers: {
+                                    'Authorization': 'Bearer e6514910439dd4e729579de341e9f6d6cfc05bad'
+                                }
+                            });
+                            const data = await response.json();
+                            return data.events || [];
+                        } catch (error) {
+                            console.warn(`Failed to load events for ${city.name}, ${city.state}:`, error);
+                            return [];
+                        }
+                    });
+
+                    const eventsArrays = await Promise.all(eventPromises);
+                    this.events = eventsArrays.flat();
+
+                    console.log(`Loaded ${this.events.length} total events`);
+                } catch (error) {
+                    console.error('Failed to load events data:', error);
+                }
+            }
+
+            // Get events for a specific venue
+            getVenueEvents(venueId) {
+                return this.events.filter(event => event.bar && event.bar.id === venueId);
+            }
+
+            renderVenues() {
+                if (!this.mapLoaded) {
+                    console.log('Map not loaded yet, skipping render');
+                    return;
+                }
+
+                // Clear existing markers
+                this.markers.forEach(marker => marker.remove());
+                this.markers = [];
+
+                if (this.eventModeEnabled) {
+                    console.log(`Rendering events... Total events: ${this.events.length}`);
+                    this.renderEvents();
+                } else {
+                    console.log(`Rendering venues... Total venues: ${this.venues.length}`);
+                    const filteredVenues = this.filterVenues();
+                    console.log(`Filtered venues: ${filteredVenues.length}`);
+
+                    filteredVenues.forEach(venue => {
+                        this.createVenueMarker(venue);
+                    });
+
+                    console.log(`Markers created: ${this.markers.length}`);
+                }
+
+                this.updateActiveCount();
+            }
+
+            renderEvents() {
+                // Filter to only upcoming events
+                const upcomingEvents = this.events.filter(event => {
+                    const eventDate = new Date(event.start_at);
+                    return eventDate >= new Date();
+                }).sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
+
+                console.log(`Rendering ${upcomingEvents.length} upcoming events`);
+
+                upcomingEvents.forEach(event => {
+                    this.createEventMarker(event);
+                });
+            }
+
+            filterVenues() {
+                let coordsCount = 0;
+                let thresholdCount = 0;
+                let categoryCount = 0;
+
+                const filtered = this.venues.filter(venue => {
+                    // Parse coordinates from location string
+                    const coords = this.parseLocation(venue.location);
+                    const hasCoords = coords && coords.longitude && coords.latitude;
+                    if (hasCoords) coordsCount++;
+
+                    const occupancy = venue.occupancy_level || 0;
+                    const meetsThreshold = occupancy >= this.occupancyThreshold;
+                    if (meetsThreshold) thresholdCount++;
+
+                    const meetsCategory = this.categoryFilter === 'all' ||
+                        venue.categories?.some(cat => cat.toLowerCase().includes(this.categoryFilter.toLowerCase()));
+                    if (meetsCategory) categoryCount++;
+
+                    return hasCoords && meetsThreshold && meetsCategory;
+                });
+
+                console.log(`Filter stats - Coords: ${coordsCount}/${this.venues.length}, Threshold: ${thresholdCount}/${this.venues.length}, Category: ${categoryCount}/${this.venues.length}`);
+                return filtered;
+            }
+
+            createVenueMarker(venue) {
+                try {
+                    // Parse coordinates from location string
+                    const coords = this.parseLocation(venue.location);
+                    if (!coords) {
+                        console.warn('No coordinates for venue:', venue.name);
+                        return;
+                    }
+
+                    // Validate coordinates are valid numbers and within reasonable range
+                    if (isNaN(coords.longitude) || isNaN(coords.latitude) ||
+                        coords.longitude < -180 || coords.longitude > 180 ||
+                        coords.latitude < -90 || coords.latitude > 90) {
+                        console.error(`INVALID COORDS for "${venue.name}": [${coords.longitude}, ${coords.latitude}]`);
+                        return;
+                    }
+
+                    // Skip coordinates at or near (0,0) - these are invalid (ocean off Africa)
+                    if (Math.abs(coords.longitude) < 1 && Math.abs(coords.latitude) < 1) {
+                        console.error(`ZERO COORDS for "${venue.name}": [${coords.longitude}, ${coords.latitude}] - skipping`);
+                        return;
+                    }
+
+                    // Ensure coordinates are within continental US bounds (rough check)
+                    const isInUS = coords.longitude >= -130 && coords.longitude <= -65 &&
+                                   coords.latitude >= 24 && coords.latitude <= 50;
+                    if (!isInUS) {
+                        console.warn(`OUT OF US BOUNDS for "${venue.name}": [${coords.longitude}, ${coords.latitude}] - Address: ${venue.address || 'N/A'}`);
+                        // Don't skip, but log it - these might still be valid US venues
+                    }
+
+                    // DEBUG: Log venue placement
+                    console.log(`MARKER: "${venue.name}" at [${coords.longitude}, ${coords.latitude}] - Address: ${venue.address || 'N/A'}`);
+
+                    const occupancy = venue.occupancy_level || 0;
+                    const color = this.getOccupancyColor(occupancy);
+                    const size = Math.max(20, 20 + occupancy * 3 * this.scale);
+
+                    const el = document.createElement('div');
+                    el.className = 'venue-marker';
+                    el.style.width = `${size}px`;
+                    el.style.height = `${size}px`;
+                    el.style.background = `radial-gradient(circle, ${color} 0%, ${color}80 50%, transparent 100%)`;
+                    el.style.borderRadius = '50%';
+                    el.style.border = `2px solid ${color}`;
+                    el.style.boxShadow = `0 0 ${size/2}px ${color}40`;
+                    el.style.cursor = 'pointer';
+                    el.style.pointerEvents = 'auto';
+
+                    if (occupancy >= 8) {
+                        el.style.animation = 'pulse 2s infinite';
+                    }
+
+                    // Build popup content with available data
+                    const categories = venue.categories && venue.categories.length > 0
+                        ? venue.categories.join(', ')
+                        : 'N/A';
+
+                    const demographics = venue.demographics || {};
+                    const malePercent = demographics.male_percentage || 0;
+                    const femalePercent = demographics.female_percentage || 0;
+                    const avgAge = demographics.average_age || 'N/A';
+
+                    const rating = venue.rating?.public_rating || 'N/A';
+                    const reviews = venue.rating?.review_count || 0;
+
+                    const openNow = venue.open_now ? '🟢 Open' : '🔴 Closed';
+
+                    // Get image URL (prefer hero, fallback to profile)
+                    const imageUrl = venue.images?.hero || venue.images?.profile;
+
+                    // Get occupancy details
+                    const dwellTime = venue.occupancy?.dwell_time_avg;
+                    const busyHours = venue.occupancy?.today?.busy_hours;
+                    const peakTime = busyHours && busyHours.length > 0 ? busyHours[0] : null;
+
+                    // Get events for this venue
+                    const venueEvents = this.getVenueEvents(venue.id);
+                    const upcomingEvents = venueEvents.filter(event => {
+                        const eventDate = new Date(event.start_at);
+                        return eventDate >= new Date();
+                    }).sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
+
+                    const popupContent = `
+                        <div class="venue-popup">
+                            ${imageUrl ? `<div style="margin: -15px -15px 10px -15px; border-radius: 8px 8px 0 0; overflow: hidden;">
+                                <img src="${imageUrl}" alt="${venue.name}" style="width: 100%; height: 120px; object-fit: cover;">
+                            </div>` : ''}
+                            <h4 style="margin: 0 0 5px 0; color: #00ff88;">${venue.name}</h4>
+                            ${venue.description ? `<div style="font-size: 11px; color: #aaa; margin-bottom: 8px; line-height: 1.3;">${venue.description}</div>` : ''}
+                            <div style="font-size: 12px; color: #ccc; margin-bottom: 8px;">${openNow}</div>
+
+                            <div class="metric" style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px;">
+                                <span>Occupancy:</span>
+                                <span style="color: ${color}; font-weight: bold;">${occupancy}/10</span>
+                            </div>
+                            <div class="occupancy-bar" style="height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
+                                <div class="occupancy-fill" style="height: 100%; width: ${occupancy * 10}%; background: ${color}; border-radius: 3px;"></div>
+                            </div>
+
+                            ${dwellTime ? `<div class="metric" style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px;">
+                                <span>Avg Visit Time:</span>
+                                <span>${dwellTime} min</span>
+                            </div>` : ''}
+
+                            ${peakTime ? `<div class="metric" style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px;">
+                                <span>Peak Hours:</span>
+                                <span>${peakTime.peak_start}:00 - ${peakTime.peak_end}:00</span>
+                            </div>` : ''}
+
+                            ${rating !== 'N/A' ? `<div class="metric" style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px;">
+                                <span>Rating:</span>
+                                <span>⭐ ${rating} (${reviews} reviews)</span>
+                            </div>` : ''}
+
+                            <div class="metric" style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px;">
+                                <span>Category:</span>
+                                <span>${categories}</span>
+                            </div>
+
+                            ${avgAge !== 'N/A' ? `<div class="metric" style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px;">
+                                <span>Avg Age:</span>
+                                <span>${avgAge} years</span>
+                            </div>` : ''}
+
+                            ${malePercent > 0 ? `<div class="metric" style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px;">
+                                <span>Demographics:</span>
+                                <span>♂ ${malePercent.toFixed(0)}% / ♀ ${femalePercent.toFixed(0)}%</span>
+                            </div>` : ''}
+
+                            ${upcomingEvents.length > 0 ? `<div class="metric" style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px;">
+                                <span>📅 Upcoming Events:</span>
+                                <span style="color: #00ff88; font-weight: bold;">${upcomingEvents.length}</span>
+                            </div>` : ''}
+
+                            ${venue.phone ? `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px;">
+                                📞 <a href="tel:${venue.phone}" style="color: #00ff88; text-decoration: none;">${venue.phone}</a>
+                            </div>` : ''}
+
+                            ${venue.website ? `<div style="margin-top: 5px; font-size: 12px;">
+                                🌐 <a href="${venue.website}" target="_blank" style="color: #00ff88; text-decoration: none;">Visit Website</a>
+                            </div>` : ''}
+
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: #999;">
+                                📍 ${venue.address || 'Address not available'}
+                            </div>
+                        </div>
+                    `;
+
+                    const popup = new mapboxgl.Popup({
+                        offset: 25,
+                        closeButton: true,
+                        closeOnClick: false,
+                        className: 'venue-popup',
+                        maxWidth: '380px'
+                    }).setHTML(popupContent);
+
+                    // Create marker with proper anchor at center
+                    const marker = new mapboxgl.Marker({
+                        element: el,
+                        anchor: 'center'
+                    })
+                        .setLngLat([coords.longitude, coords.latitude])
+                        .setPopup(popup)
+                        .addTo(this.map);
+
+                    // Auto-pan map when marker is clicked to ensure popup is visible
+                    el.addEventListener('click', () => {
+                        // Small delay to let popup render, then pan map to center it
+                        setTimeout(() => {
+                            this.map.easeTo({
+                                center: [coords.longitude, coords.latitude],
+                                offset: [0, -150], // Offset to account for popup height
+                                duration: 500
+                            });
+                        }, 50);
+                    });
+
+                    this.markers.push(marker);
+                } catch (error) {
+                    console.error('Error creating marker for venue:', venue.name, error);
+                }
+            }
+
+            createEventMarker(event) {
+                try {
+                    // Get coordinates from event's bar location
+                    if (!event.bar || !event.bar.latitude || !event.bar.longitude) {
+                        console.warn('No coordinates for event:', event.title);
+                        return;
+                    }
+
+                    const coords = {
+                        longitude: event.bar.longitude,
+                        latitude: event.bar.latitude
+                    };
+
+                    // DEBUG: Log event coordinates
+                    console.log(`EVENT MARKER: "${event.title}" at [${coords.longitude}, ${coords.latitude}] - Venue: ${event.bar.name}`);
+
+                    // Validate coordinates
+                    if (isNaN(coords.longitude) || isNaN(coords.latitude) ||
+                        coords.longitude < -180 || coords.longitude > 180 ||
+                        coords.latitude < -90 || coords.latitude > 90) {
+                        console.error(`INVALID COORDS for event "${event.title}": [${coords.longitude}, ${coords.latitude}]`);
+                        return;
+                    }
+
+                    // Skip coordinates at or near (0,0)
+                    if (Math.abs(coords.longitude) < 1 && Math.abs(coords.latitude) < 1) {
+                        console.error(`ZERO COORDS for event "${event.title}": [${coords.longitude}, ${coords.latitude}] - skipping`);
+                        return;
+                    }
+
+                    // Check US bounds
+                    const isInUS = coords.longitude >= -130 && coords.longitude <= -65 &&
+                                   coords.latitude >= 24 && coords.latitude <= 50;
+                    if (!isInUS) {
+                        console.warn(`OUT OF US BOUNDS for event "${event.title}": [${coords.longitude}, ${coords.latitude}]`);
+                    }
+
+                    // Create event marker with distinct purple/pink styling
+                    const el = document.createElement('div');
+                    el.className = 'event-marker';
+                    el.style.width = '40px';
+                    el.style.height = '40px';
+                    el.style.background = 'radial-gradient(circle, #ff00ff 0%, #ff00ff80 50%, transparent 100%)';
+                    el.style.borderRadius = '50%';
+                    el.style.border = '2px solid #ff00ff';
+                    el.style.boxShadow = '0 0 20px #ff00ff60';
+                    el.style.cursor = 'pointer';
+                    el.style.animation = 'pulse 2s infinite';
+                    el.style.pointerEvents = 'auto';
+
+                    // Add calendar icon - use flex centering instead of absolute positioning
+                    el.style.display = 'flex';
+                    el.style.alignItems = 'center';
+                    el.style.justifyContent = 'center';
+                    el.innerHTML = '<div style="font-size: 20px;">📅</div>';
+
+                    // Format event date/time
+                    const eventDate = new Date(event.start_at);
+                    const dateStr = eventDate.toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric'
+                    });
+                    const timeStr = eventDate.toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit'
+                    });
+
+                    const endDate = event.end_at ? new Date(event.end_at) : null;
+                    const endTimeStr = endDate ? endDate.toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit'
+                    }) : null;
+
+                    const popupContent = `
+                        <div class="venue-popup">
+                            <div style="background: linear-gradient(135deg, #ff00ff, #8b00ff); margin: -15px -15px 10px -15px; padding: 15px; border-radius: 8px 8px 0 0;">
+                                <h4 style="margin: 0; color: #fff; font-size: 16px;">📅 ${event.title}</h4>
+                            </div>
+
+                            <div style="margin-bottom: 10px;">
+                                <div style="font-size: 14px; font-weight: bold; color: #ff00ff; margin-bottom: 5px;">
+                                    ${dateStr}
+                                </div>
+                                <div style="font-size: 13px; color: #ccc;">
+                                    ${timeStr}${endTimeStr ? ` - ${endTimeStr}` : ''}
+                                </div>
+                            </div>
+
+                            ${event.description ? `<div style="font-size: 12px; color: #aaa; line-height: 1.4; margin-bottom: 10px; padding: 10px; background: rgba(255,0,255,0.05); border-radius: 4px;">
+                                ${event.description}
+                            </div>` : ''}
+
+                            ${event.classification ? `<div style="display: inline-block; padding: 4px 8px; background: rgba(255,0,255,0.2); border-radius: 4px; font-size: 11px; color: #ff00ff; margin-bottom: 10px;">
+                                ${event.classification.replace('_', ' ').toUpperCase()}
+                            </div>` : ''}
+
+                            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                                <div style="font-size: 13px; font-weight: bold; color: #00ff88; margin-bottom: 5px;">
+                                    ${event.bar.name}
+                                </div>
+                                <div style="font-size: 11px; color: #999;">
+                                    📍 ${event.bar.address}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    const popup = new mapboxgl.Popup({
+                        offset: 25,
+                        closeButton: true,
+                        closeOnClick: false,
+                        className: 'venue-popup',
+                        maxWidth: '380px'
+                    }).setHTML(popupContent);
+
+                    const marker = new mapboxgl.Marker({
+                        element: el,
+                        anchor: 'center'
+                    })
+                        .setLngLat([coords.longitude, coords.latitude])
+                        .setPopup(popup)
+                        .addTo(this.map);
+
+                    // Auto-pan map when marker is clicked
+                    el.addEventListener('click', () => {
+                        setTimeout(() => {
+                            this.map.easeTo({
+                                center: [coords.longitude, coords.latitude],
+                                offset: [0, -150],
+                                duration: 500
+                            });
+                        }, 50);
+                    });
+
+                    this.markers.push(marker);
+                } catch (error) {
+                    console.error('Error creating marker for event:', event.title, error);
+                }
+            }
+
+            getOccupancyColor(occupancy) {
+                if (occupancy <= 3) return '#ff4444';
+                if (occupancy <= 6) return '#ffaa00';
+                return '#00ff88';
+            }
+
+            setupControls() {
+                document.getElementById('occupancy-slider').addEventListener('input', (e) => {
+                    this.occupancyThreshold = parseInt(e.target.value);
+                    document.getElementById('occupancy-threshold').textContent = this.occupancyThreshold;
+                    this.renderVenues();
+                });
+
+                document.getElementById('scale-slider').addEventListener('input', (e) => {
+                    this.scale = parseFloat(e.target.value);
+                    document.getElementById('scale-value').textContent = `${this.scale}x`;
+                    this.renderVenues();
+                });
+
+                document.getElementById('category-filter').addEventListener('change', (e) => {
+                    this.categoryFilter = e.target.value;
+                    this.renderVenues();
+                });
+
+                document.getElementById('real-time-toggle').addEventListener('change', (e) => {
+                    this.realTimeEnabled = e.target.checked;
+                    if (this.realTimeEnabled) {
+                        this.startRealTimeUpdates();
+                    } else {
+                        this.stopRealTimeUpdates();
+                    }
+                });
+
+                document.getElementById('event-mode-toggle').addEventListener('change', (e) => {
+                    this.eventModeEnabled = e.target.checked;
+                    this.renderVenues();
+                });
+            }
+
+            fitMapToVenues() {
+                if (!this.mapLoaded || this.markers.length === 0) return;
+
+                const bounds = new mapboxgl.LngLatBounds();
+
+                // Add all marker coordinates to bounds
+                this.markers.forEach(marker => {
+                    bounds.extend(marker.getLngLat());
+                });
+
+                // Fit map to bounds with padding
+                this.map.fitBounds(bounds, {
+                    padding: { top: 100, bottom: 100, left: 100, right: 400 },
+                    maxZoom: 12,
+                    duration: 1500
+                });
+            }
+
+            focusOnHotspots() {
+                if (!this.mapLoaded) {
+                    alert('Map not loaded yet. Please wait for initialization.');
+                    return;
+                }
+
+                const hotspots = this.venues
+                    .filter(v => {
+                        const coords = this.parseLocation(v.location);
+                        return coords && (v.occupancy_level || 0) >= 4;
+                    })
+                    .sort((a, b) => (b.occupancy_level || 0) - (a.occupancy_level || 0));
+
+                if (hotspots.length > 0) {
+                    const topHotspot = hotspots[0];
+                    const coords = this.parseLocation(topHotspot.location);
+                    this.map.flyTo({
+                        center: [coords.longitude, coords.latitude],
+                        zoom: 15,
+                        pitch: 60,
+                        bearing: 0,
+                        duration: 2000
+                    });
+                } else {
+                    alert('No hotspots found with current filter settings.');
+                }
+            }
+
+            startRealTimeUpdates() {
+                this.realTimeInterval = setInterval(async () => {
+                    if (this.realTimeEnabled) {
+                        await this.loadBarGlanceData();
+                        await this.loadEventsData();
+                        if (this.mapLoaded) {
+                            this.renderVenues();
+                        }
+                        this.lastUpdate = new Date();
+                        document.getElementById('last-update').textContent =
+                            this.lastUpdate.toLocaleTimeString();
+                    }
+                }, 30000);
+            }
+
+            stopRealTimeUpdates() {
+                if (this.realTimeInterval) {
+                    clearInterval(this.realTimeInterval);
+                }
+            }
+
+            updateVenueCount() {
+                document.getElementById('venues-count').textContent = this.venues.length;
+            }
+
+            updateActiveCount() {
+                const activeCount = this.markers.length;
+                document.getElementById('active-count').textContent = activeCount;
+            }
+
+            hideLoading() {
+                const loading = document.getElementById('loading');
+                if (loading) loading.style.display = 'none';
+            }
+        }
+
+        // Initialize the visualization when the page loads
+        let visualizationInstance;
+        document.addEventListener('DOMContentLoaded', () => {
+            visualizationInstance = new SocialMapVisualization();
+        });
+
+        // Make focusOnHotspots available globally for the button
+        function focusOnHotspots() {
+            if (visualizationInstance) {
+                visualizationInstance.focusOnHotspots();
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Charleston Social Map - Google 3D</title>
+
+    <!-- Preconnect to speed up API calls and map tiles -->
+    <link rel="preconnect" href="https://partner-api.barglance.com">
+    <link rel="preconnect" href="https://maps.googleapis.com">
+    <link rel="preconnect" href="https://maps.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://partner-api.barglance.com">
+    <link rel="dns-prefetch" href="https://maps.googleapis.com">
+    <link rel="dns-prefetch" href="https://maps.gstatic.com">
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        gmp-map-3d {
+            width: 100%;
+            height: 100%;
+        }
+
+        gmp-marker-3d {
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        /* Hide any default Google Maps UI elements */
+        gmp-map-3d::part(default-ui) {
+            display: none !important;
+        }
+
+        /* Hide POI labels that might appear */
+        gmp-map-3d .gm-style-pbc,
+        gmp-map-3d .gm-style-cc,
+        gmp-map-3d .gmnoprint {
+            display: none !important;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 20px;
+            min-width: 280px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1000;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .control-panel h3 {
+            margin: 0 0 15px 0;
+            color: #00ff88;
+            font-size: 18px;
+            font-weight: 600;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #ccc;
+        }
+
+        .slider {
+            width: 100%;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #00ff88;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+
+        .status-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            padding: 12px;
+            z-index: 1000;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            min-width: 200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        .status-value {
+            color: #00ff88;
+            font-weight: 500;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            padding: 15px;
+            z-index: 1000;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .legend h4 {
+            margin: 0 0 10px 0;
+            color: #00ff88;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 30px 40px;
+            border-radius: 12px;
+            text-align: center;
+            z-index: 2000;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid #00ff88;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Info Window Styling */
+        .info-window {
+            background: rgba(0, 0, 0, 0.95);
+            border-radius: 8px;
+            padding: 15px;
+            max-width: 340px;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+            position: fixed;
+            z-index: 10000;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .info-window h4 {
+            margin: 0 0 10px 0;
+            color: #00ff88;
+            font-size: 16px;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+
+        .info-window .metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        .info-window .occupancy-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 5px 0 10px 0;
+        }
+
+        .info-window .occupancy-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .info-window .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #00ff88;
+            font-size: 20px;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .info-window .close-btn:hover {
+            background: rgba(0, 255, 136, 0.2);
+            transform: scale(1.1);
+        }
+
+        select, button {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        button {
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* Scrollbar styling for info window */
+        .info-window::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .info-window::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        .info-window::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 136, 0.5);
+            border-radius: 3px;
+        }
+
+        .info-window::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 255, 136, 0.7);
+        }
+
+        .error-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(180, 0, 0, 0.95);
+            color: #fff;
+            padding: 12px 20px;
+            z-index: 3000;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        .error-banner.visible {
+            display: flex;
+        }
+
+        .error-banner .retry-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid #fff;
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .error-banner .retry-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(0, 255, 136, 0.4);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 2500;
+            opacity: 0;
+            transition: transform 0.25s ease, opacity 0.25s ease;
+            pointer-events: none;
+        }
+
+        .toast.visible {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .status-item.updating .status-value {
+            color: #ffaa00;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-banner" id="error-banner" role="alert">
+        <span id="error-message"></span>
+        <button type="button" class="retry-btn" id="error-retry">Retry</button>
+    </div>
+
+    <div class="toast" id="toast" aria-live="polite"></div>
+
+    <div id="map"></div>
+
+    <div class="loading" id="loading">
+        <div class="loading-spinner"></div>
+        <div>Loading map...</div>
+    </div>
+
+    <div class="control-panel">
+        <h3>Charleston Social Map</h3>
+
+        <div class="control-group">
+            <label>Occupancy Threshold: <span id="occupancy-threshold">0</span></label>
+            <input type="range" class="slider" id="occupancy-slider" min="0" max="10" value="0">
+        </div>
+
+        <div class="control-group">
+            <label>Marker Scale: <span id="scale-value">1.0x</span></label>
+            <input type="range" class="slider" id="scale-slider" min="0.5" max="2.5" step="0.1" value="1">
+        </div>
+
+        <div class="control-group">
+            <label>Activity Filter</label>
+            <select id="category-filter" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: white;">
+                <option value="all">All Categories</option>
+                <option value="Nightclub">Nightclubs</option>
+                <option value="Sports">Sports Bars</option>
+                <option value="Live Music">Live Music</option>
+                <option value="Pub">Pubs</option>
+                <option value="Bar">Bars</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="real-time-toggle" checked> Real-time Updates (30s)
+            </label>
+        </div>
+
+        <button onclick="focusOnHotspots()" style="width: 100%; padding: 10px; background: rgba(0, 255, 136, 0.2); border: 1px solid #00ff88; border-radius: 6px; color: #00ff88; cursor: pointer; margin-top: 10px; font-weight: 600;">
+            Focus on Hotspots
+        </button>
+
+        <button onclick="resetView()" style="width: 100%; padding: 10px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 6px; color: white; cursor: pointer; margin-top: 8px;">
+            Reset View
+        </button>
+    </div>
+
+    <div class="status-indicator">
+        <div class="status-item">
+            <span>Venues Loaded:</span>
+            <span class="status-value" id="venues-count">0</span>
+        </div>
+        <div class="status-item">
+            <span>Active Venues:</span>
+            <span class="status-value" id="active-count">0</span>
+        </div>
+        <div class="status-item" id="last-update-row">
+            <span>Last Update:</span>
+            <span class="status-value" id="last-update">-</span>
+        </div>
+        <div class="status-item empty-hint" id="empty-hint" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: #999;">
+            <span id="empty-hint-text"></span>
+        </div>
+    </div>
+
+    <div class="legend">
+        <h4>Activity Levels</h4>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ff4444; box-shadow: 0 0 8px #ff4444;"></div>
+            <span>Low (0-3)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ffaa00; box-shadow: 0 0 8px #ffaa00;"></div>
+            <span>Medium (4-6)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #00ff88; box-shadow: 0 0 8px #00ff88;"></div>
+            <span>High (7-10)</span>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        // Use config.js keys if present; fallback for local dev without config (avoid committing real keys to config.js)
+        window.MAP_CONFIG = window.MAP_CONFIG || {};
+        var _googleKey = window.MAP_CONFIG.googleMapsApiKey || 'AIzaSyAZhB1PVOnVtne6lCNr2_5sSd5QwiV42ng';
+        var _barGlanceKey = window.MAP_CONFIG.barGlanceApiKey || 'e6514910439dd4e729579de341e9f6d6cfc05bad';
+
+        (function() {
+            var mapUrl = 'https://maps.googleapis.com/maps/api/js?key=' + _googleKey + '&v=beta&libraries=maps3d&callback=initMap';
+            var preload = document.createElement('link');
+            preload.rel = 'preload';
+            preload.as = 'script';
+            preload.href = mapUrl;
+            document.head.appendChild(preload);
+            var s = document.createElement('script');
+            s.async = true;
+            s.src = mapUrl;
+            document.head.appendChild(s);
+        })();
+    </script>
+    <script>
+        function getBarGlanceKey() {
+            return window.MAP_CONFIG && window.MAP_CONFIG.barGlanceApiKey ? window.MAP_CONFIG.barGlanceApiKey : 'e6514910439dd4e729579de341e9f6d6cfc05bad';
+        }
+
+        function showError(message) {
+            var banner = document.getElementById('error-banner');
+            document.getElementById('error-message').textContent = message;
+            banner.classList.add('visible');
+        }
+
+        function hideError() {
+            document.getElementById('error-banner').classList.remove('visible');
+        }
+
+        function showToast(message) {
+            var toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('visible');
+            setTimeout(function() {
+                toast.classList.remove('visible');
+            }, 4000);
+        }
+
+        function escapeHtml(str) {
+            if (str == null || str === undefined) return '';
+            var div = document.createElement('div');
+            div.textContent = String(str);
+            return div.innerHTML;
+        }
+
+        function safeUrl(url) {
+            if (!url || typeof url !== 'string') return '';
+            var t = url.trim();
+            return /^https?:\/\//i.test(t) ? t : '';
+        }
+
+        function safeTel(phone) {
+            if (!phone || typeof phone !== 'string') return '';
+            return 'tel:' + phone.replace(/[^\d+\-(). ]/g, '');
+        }
+
+        class CharlestonSocialMap {
+            constructor() {
+                this.map3dElement = null;
+                this.venues = [];
+                this.markers = [];
+                this.occupancyThreshold = 0;
+                this.scale = 1.0;
+                this.categoryFilter = 'all';
+                this.realTimeEnabled = true;
+                this.lastUpdate = null;
+                this.currentInfoWindow = null;
+                this.loadError = null;
+            }
+
+            async init() {
+                console.log('Initializing Charleston Social Map...');
+
+                await this.createMapElement();
+                await this.waitForMapReady();
+                this.setupControls();
+                this.hideLoading();
+
+                var dataOk = await this.loadCharlestonData();
+
+                if (!dataOk) {
+                    if (this.loadError) showError(this.loadError);
+                    document.getElementById('error-retry').onclick = function() {
+                        hideError();
+                        mapInstance.loadCharlestonData().then(function(ok) {
+                            if (ok) {
+                                mapInstance.populateCategoryFilter();
+                                mapInstance.waitForMapSteady().then(function() {
+                                    mapInstance.renderVenuesBatched();
+                                });
+                            } else {
+                                showError(mapInstance.loadError || 'Failed to load venues.');
+                            }
+                        });
+                    };
+                } else {
+                    this.populateCategoryFilter();
+                    await this.waitForMapSteady();
+                    this.renderVenuesBatched();
+                    const lastEl = document.getElementById('last-update');
+                    if (lastEl) lastEl.textContent = new Date().toLocaleTimeString();
+                    this.startRealTimeUpdates();
+                    window.addEventListener('beforeunload', () => this.stopRealTimeUpdates());
+                }
+            }
+
+            async createMapElement() {
+                var mapId = (window.MAP_CONFIG && window.MAP_CONFIG.mapId) || '2430553ffa115d7e9de16e31';
+                var container = document.getElementById('map');
+                if (!container || typeof google === 'undefined' || !google.maps) {
+                    throw new Error('Map container or Google Maps API not ready');
+                }
+                var lib = await google.maps.importLibrary('maps3d');
+                var Map3DElement = lib.Map3DElement;
+                var MapMode = lib.MapMode || { HYBRID: 'HYBRID' };
+                var opts = {
+                    center: { lat: 32.7765, lng: -79.9311 },
+                    range: 3000,
+                    tilt: 45,
+                    heading: 20,
+                    mode: MapMode.HYBRID || 'HYBRID',
+                    gestureHandling: 'GREEDY',
+                    minTilt: 25,
+                    maxTilt: 85,
+                    defaultUIDisabled: true,
+                    bounds: { north: 32.88, south: 32.68, east: -79.75, west: -80.12 }
+                };
+                if (mapId) opts.mapId = mapId;
+                this.map3dElement = new Map3DElement(opts);
+                this.map3dElement.id = 'map3d';
+                this.map3dElement.style.width = '100%';
+                this.map3dElement.style.height = '100%';
+                this.map3dElement.setAttribute('default-ui-disabled', '');
+                this.map3dElement.addEventListener('gmp-click', (ev) => {
+                    if (ev && ev.placeId) {
+                        if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+                        if (typeof ev.preventDefault === 'function') ev.preventDefault();
+                    }
+                    this.handleMapClick(ev);
+                });
+                container.appendChild(this.map3dElement);
+            }
+
+            waitForMapSteady() {
+                var el = this.map3dElement;
+                return new Promise(function(resolve) {
+                    if (!el) { resolve(); return; }
+                    function finish() { el.removeEventListener('gmp-steadystate', onSteady); resolve(); }
+                    function onSteady(ev) {
+                        if (ev.detail && ev.detail.isSteady) finish();
+                    }
+                    el.addEventListener('gmp-steadystate', onSteady);
+                    setTimeout(finish, 4000);
+                });
+            }
+
+            async waitForMapReady() {
+                return new Promise((resolve) => {
+                    const onReady = () => {
+                        this.applyCleanMapStyle();
+                        this.applyMapBounds();
+                        resolve();
+                    };
+                    if (this.map3dElement && typeof google !== 'undefined' && google.maps) {
+                        console.log('Map element ready immediately');
+                        onReady();
+                        return;
+                    }
+                    const checkReady = setInterval(() => {
+                        if (this.map3dElement && typeof google !== 'undefined' && google.maps) {
+                            clearInterval(checkReady);
+                            console.log('Map element ready');
+                            onReady();
+                        }
+                    }, 50);
+                    setTimeout(() => {
+                        clearInterval(checkReady);
+                        console.log('Map initialization timeout - proceeding anyway');
+                        resolve();
+                    }, 5000);
+                });
+            }
+
+            applyMapBounds() {
+                if (!this.map3dElement) return;
+                try {
+                    var b = { north: 32.88, south: 32.68, east: -79.75, west: -80.12 };
+                    this.map3dElement.bounds = b;
+                } catch (e) { console.warn('Map bounds not applied:', e); }
+            }
+
+            applyCleanMapStyle() {
+                // Apply styling to hide all default POI markers and labels
+                // Keep only 3D buildings and our custom markers
+                try {
+                    // For gmp-map-3d, we use attributes and potentially internal map instance
+                    if (this.map3dElement) {
+                        // The default-labels-disabled and default-ui-disabled attributes
+                        // should handle most of the cleanup
+                        console.log('Clean map style applied via attributes');
+                    }
+                } catch (error) {
+                    console.warn('Could not apply map styling:', error);
+                }
+            }
+
+            parseLocation(locationString) {
+                if (!locationString) return null;
+
+                const match = locationString.match(/POINT\s*\(\s*(-?\d+\.?\d*)\s*,?\s*(-?\d+\.?\d*)\s*\)/);
+                if (match) {
+                    const longitude = parseFloat(match[1]);
+                    const latitude = parseFloat(match[2]);
+                    if (isNaN(longitude) || isNaN(latitude)) return null;
+                    if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) return null;
+                    if (Math.abs(longitude) < 1e-6 && Math.abs(latitude) < 1e-6) return null;
+                    return { longitude, latitude };
+                }
+                return null;
+            }
+
+            async loadCharlestonData() {
+                this.loadError = null;
+                try {
+                    console.log('Fetching Charleston BarGlance data...');
+                    const startTime = performance.now();
+                    const response = await fetch('https://partner-api.barglance.com/api/v1/partner/bars', {
+                        headers: {
+                            'Authorization': 'Bearer ' + getBarGlanceKey()
+                        }
+                    });
+
+                    if (!response.ok) {
+                        let msg = 'Venues failed to load (HTTP ' + response.status + '). ';
+                        if (response.status === 401) msg += 'Invalid or missing BarGlance API key — check config.js.';
+                        else if (response.status === 403) msg += 'Access forbidden. Check that your BarGlance Partner API key has access to this endpoint and is not restricted by IP or domain.';
+                        else if (response.status >= 500) msg += 'Server error — try again in a moment.';
+                        try {
+                            const errBody = await response.clone().json();
+                            if (errBody && (errBody.message || errBody.error)) msg += ' ' + (errBody.message || errBody.error);
+                        } catch (_) {}
+                        this.loadError = msg;
+                        console.error(this.loadError);
+                        this.venues = [];
+                        this.updateVenueCount();
+                        return false;
+                    }
+
+                    let data;
+                    try {
+                        data = await response.json();
+                    } catch (e) {
+                        this.loadError = 'Invalid response from server.';
+                        console.error('Failed to parse JSON:', e);
+                        this.venues = [];
+                        this.updateVenueCount();
+                        return false;
+                    }
+
+                    this.venues = (data.bars || []).filter(venue =>
+                        venue.city?.name?.toLowerCase().includes('charleston') && venue.city?.state === 'SC'
+                    );
+
+                    const endTime = performance.now();
+                    console.log(`Loaded ${this.venues.length} Charleston venues in ${Math.round(endTime - startTime)}ms`);
+                    this.updateVenueCount();
+                    if (this.venues.length > 0) console.log('Sample Charleston venue:', this.venues[0]);
+                    return true;
+                } catch (error) {
+                    this.loadError = 'Network error: ' + (error.message || 'Could not load venues.');
+                    console.error('Failed to load Charleston data:', error);
+                    this.venues = [];
+                    this.updateVenueCount();
+                    return false;
+                }
+            }
+
+            populateCategoryFilter() {
+                const select = document.getElementById('category-filter');
+                while (select.options.length) select.remove(0);
+                const categories = new Set();
+                this.venues.forEach(venue => {
+                    (venue.categories || []).forEach(cat => {
+                        if (cat && cat.trim()) categories.add(cat.trim());
+                    });
+                });
+                const sorted = Array.from(categories).sort();
+                select.appendChild(new Option('All Categories', 'all'));
+                sorted.forEach(cat => select.appendChild(new Option(cat, cat)));
+            }
+
+            filterVenues() {
+                return this.venues.filter(venue => {
+                    const coords = this.parseLocation(venue.location);
+                    const hasCoords = coords && coords.longitude && coords.latitude;
+
+                    const occupancy = venue.occupancy_level || 0;
+                    const meetsThreshold = occupancy >= this.occupancyThreshold;
+
+                    const meetsCategory = this.categoryFilter === 'all' ||
+                        venue.categories?.some(cat => cat.toLowerCase().includes(this.categoryFilter.toLowerCase()));
+
+                    return hasCoords && meetsThreshold && meetsCategory;
+                });
+            }
+
+            renderVenues() {
+                console.log('Rendering venues...');
+
+                // Clear existing markers
+                this.clearMarkers();
+
+                const filteredVenues = this.filterVenues();
+                console.log(`Rendering ${filteredVenues.length} venues`);
+
+                filteredVenues.forEach(venue => {
+                    this.createVenueMarker(venue);
+                });
+
+                this.updateActiveCount();
+            }
+
+            renderVenuesBatched() {
+                console.log('Rendering venues with batching...');
+
+                // Clear existing markers
+                this.clearMarkers();
+
+                const filteredVenues = this.filterVenues();
+                console.log(`Rendering ${filteredVenues.length} venues in batches`);
+
+                // Batch size - render this many markers per frame
+                const batchSize = 10;
+                let currentIndex = 0;
+
+                const renderBatch = () => {
+                    const endIndex = Math.min(currentIndex + batchSize, filteredVenues.length);
+
+                    // Render current batch
+                    for (let i = currentIndex; i < endIndex; i++) {
+                        this.createVenueMarker(filteredVenues[i]);
+                    }
+
+                    currentIndex = endIndex;
+                    this.updateActiveCount();
+
+                    // Schedule next batch if there are more venues
+                    if (currentIndex < filteredVenues.length) {
+                        requestAnimationFrame(renderBatch);
+                    } else {
+                        console.log('All markers rendered');
+                    }
+                };
+
+                // Start rendering
+                if (filteredVenues.length > 0) {
+                    requestAnimationFrame(renderBatch);
+                } else {
+                    this.updateActiveCount();
+                }
+            }
+
+            createVenueMarker(venue) {
+                try {
+                    const coords = this.parseLocation(venue.location);
+                    if (!coords) return;
+
+                    const occupancy = venue.occupancy_level || 0;
+                    const color = this.getOccupancyColor(occupancy);
+                    const scale = Math.max(0.8, 0.8 + (occupancy / 10) * this.scale);
+
+                    // Create marker element
+                    const marker = document.createElement('gmp-marker-3d');
+                    marker.setAttribute('position', `${coords.latitude},${coords.longitude}`);
+                    marker.setAttribute('altitude-mode', 'CLAMP_TO_GROUND');
+                    marker.setAttribute('title', venue.name || 'Venue');
+                    marker.setAttribute('scale', scale.toFixed(2));
+
+                    // Add click event listener
+                    const onMarkerClick = (ev) => {
+                        if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+                        this.showInfoWindow(venue, occupancy, color);
+                    };
+                    marker.addEventListener('gmp-click', onMarkerClick);
+                    marker.addEventListener('click', onMarkerClick);
+
+                    // Append marker to map
+                    this.map3dElement.appendChild(marker);
+
+                    this.markers.push({
+                        element: marker,
+                        venue: venue,
+                        coords: coords
+                    });
+
+                } catch (error) {
+                    console.error('Error creating marker for venue:', venue.name, error);
+                }
+            }
+
+            handleMapClick(ev) {
+                const latLng = ev?.latLng || ev?.detail?.latLng || ev?.detail?.position || ev?.position || null;
+                if (!latLng) return;
+                const lat = typeof latLng.lat === 'function' ? latLng.lat() : (latLng.lat ?? latLng.latitude);
+                const lng = typeof latLng.lng === 'function' ? latLng.lng() : (latLng.lng ?? latLng.longitude);
+                if (typeof lat !== 'number' || typeof lng !== 'number') return;
+
+                const nearest = this.findNearestMarker(lat, lng, 140);
+                if (nearest) {
+                    const occupancy = nearest.venue.occupancy_level || 0;
+                    const color = this.getOccupancyColor(occupancy);
+                    this.showInfoWindow(nearest.venue, occupancy, color);
+                }
+            }
+
+            findNearestMarker(lat, lng, maxMeters) {
+                let best = null;
+                let bestDist = maxMeters;
+                for (const marker of this.markers) {
+                    if (!marker?.coords) continue;
+                    const d = this.distanceMeters(lat, lng, marker.coords.latitude, marker.coords.longitude);
+                    if (d < bestDist) {
+                        bestDist = d;
+                        best = marker;
+                    }
+                }
+                return best;
+            }
+
+            distanceMeters(lat1, lng1, lat2, lng2) {
+                const R = 6371000;
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLng = (lng2 - lng1) * Math.PI / 180;
+                const a =
+                    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c;
+            }
+
+            showInfoWindow(venue, occupancy, color) {
+                this.closeInfoWindow();
+
+                const categories = venue.categories && venue.categories.length > 0
+                    ? venue.categories.join(', ')
+                    : 'N/A';
+                const demographics = venue.demographics || {};
+                const malePercent = demographics.male_percentage || 0;
+                const femalePercent = demographics.female_percentage || 0;
+                const avgAge = demographics.average_age != null ? String(demographics.average_age) : 'N/A';
+                const rating = venue.rating?.public_rating != null ? String(venue.rating.public_rating) : 'N/A';
+                const reviews = venue.rating?.review_count || 0;
+                const openNow = venue.open_now ? 'Open' : 'Closed';
+                const openStatus = venue.open_now ? 'color: #00ff88;' : 'color: #ff4444;';
+                const imageUrl = safeUrl(venue.images?.hero || venue.images?.profile || '');
+                const dwellTime = venue.occupancy?.dwell_time_avg;
+                const peakHours = venue.occupancy?.today?.busy_hours;
+                const peakTime = peakHours && peakHours.length > 0 ? peakHours[0] : null;
+
+                const infoWindow = document.createElement('div');
+                infoWindow.className = 'info-window';
+                infoWindow.style.top = '50%';
+                infoWindow.style.left = '50%';
+                infoWindow.style.transform = 'translate(-50%, -50%)';
+
+                const name = escapeHtml(venue.name);
+                const description = venue.description ? escapeHtml(venue.description) : '';
+                const address = escapeHtml(venue.address || 'Address not available');
+                const phoneDisplay = escapeHtml(venue.phone || '');
+                const phoneHref = venue.phone ? safeTel(venue.phone) : '';
+                const websiteHref = safeUrl(venue.website || '');
+                const categoriesEsc = escapeHtml(categories);
+                const ratingEsc = escapeHtml(rating);
+                const avgAgeEsc = escapeHtml(avgAge);
+                const peakStart = peakTime ? escapeHtml(String(peakTime.peak_start)) : '';
+                const peakEnd = peakTime ? escapeHtml(String(peakTime.peak_end)) : '';
+
+                infoWindow.innerHTML =
+                    '<button class="close-btn" type="button" aria-label="Close">×</button>' +
+                    (imageUrl ? '<div style="margin: -15px -15px 10px -15px; border-radius: 8px 8px 0 0; overflow: hidden;">' +
+                        '<img src="' + imageUrl + '" alt="" style="width: 100%; height: 140px; object-fit: cover;"></div>' : '') +
+                    '<h4>' + name + '</h4>' +
+                    (description ? '<div style="font-size: 11px; color: #aaa; margin-bottom: 8px; line-height: 1.4;">' + description + '</div>' : '') +
+                    '<div style="font-size: 13px; ' + openStatus + ' margin-bottom: 10px; font-weight: 600;">' + escapeHtml(openNow) + '</div>' +
+                    '<div class="metric"><span>Occupancy:</span><span style="color: ' + color + '; font-weight: bold;">' + occupancy + '/10</span></div>' +
+                    '<div class="occupancy-bar"><div class="occupancy-fill" style="width: ' + (occupancy * 10) + '%; background: ' + color + ';"></div></div>' +
+                    (dwellTime != null ? '<div class="metric"><span>Avg Visit Time:</span><span>' + escapeHtml(String(dwellTime)) + ' min</span></div>' : '') +
+                    (peakTime ? '<div class="metric"><span>Peak Hours:</span><span>' + peakStart + ':00 - ' + peakEnd + ':00</span></div>' : '') +
+                    (rating !== 'N/A' ? '<div class="metric"><span>Rating:</span><span>' + ratingEsc + ' (' + reviews + ' reviews)</span></div>' : '') +
+                    '<div class="metric"><span>Category:</span><span>' + categoriesEsc + '</span></div>' +
+                    (avgAgeEsc !== 'N/A' ? '<div class="metric"><span>Avg Age:</span><span>' + avgAgeEsc + ' years</span></div>' : '') +
+                    (malePercent > 0 ? '<div class="metric"><span>Demographics:</span><span>' + malePercent.toFixed(0) + '% / ' + femalePercent.toFixed(0) + '%</span></div>' : '') +
+                    (phoneHref ? '<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px;">' +
+                        '<a href="' + phoneHref + '" style="color: #00ff88; text-decoration: none;">' + phoneDisplay + '</a></div>' : '') +
+                    (websiteHref ? '<div style="margin-top: 5px; font-size: 12px;">' +
+                        '<a href="' + websiteHref + '" target="_blank" rel="noopener noreferrer" style="color: #00ff88; text-decoration: none;">Visit Website</a></div>' : '') +
+                    '<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: #999;">' + address + '</div>';
+
+                const self = this;
+                infoWindow.querySelector('.close-btn').addEventListener('click', function() { self.closeInfoWindow(); });
+
+                document.body.appendChild(infoWindow);
+                this.currentInfoWindow = infoWindow;
+
+                this._escapeHandler = function(e) {
+                    if (e.key === 'Escape') {
+                        self.closeInfoWindow();
+                        document.removeEventListener('keydown', self._escapeHandler);
+                        document.removeEventListener('click', self._clickOutsideHandler);
+                    }
+                };
+                this._clickOutsideHandler = function(e) {
+                    if (self.currentInfoWindow && !self.currentInfoWindow.contains(e.target) && !e.target.closest('gmp-marker-3d')) {
+                        self.closeInfoWindow();
+                        document.removeEventListener('keydown', self._escapeHandler);
+                        document.removeEventListener('click', self._clickOutsideHandler);
+                    }
+                };
+                document.addEventListener('keydown', this._escapeHandler);
+                setTimeout(function() { document.addEventListener('click', this._clickOutsideHandler); }.bind(this), 0);
+            }
+
+            closeInfoWindow() {
+                if (this._escapeHandler) {
+                    document.removeEventListener('keydown', this._escapeHandler);
+                    this._escapeHandler = null;
+                }
+                if (this._clickOutsideHandler) {
+                    document.removeEventListener('click', this._clickOutsideHandler);
+                    this._clickOutsideHandler = null;
+                }
+                if (this.currentInfoWindow && this.currentInfoWindow.parentNode) {
+                    this.currentInfoWindow.parentNode.removeChild(this.currentInfoWindow);
+                }
+                this.currentInfoWindow = null;
+            }
+
+            getOccupancyColor(occupancy) {
+                if (occupancy <= 3) return '#ff4444';
+                if (occupancy <= 6) return '#ffaa00';
+                return '#00ff88';
+            }
+
+            clearMarkers() {
+                // Batch DOM removals for better performance
+                const fragment = document.createDocumentFragment();
+                this.markers.forEach(marker => {
+                    if (marker.element?.parentNode) {
+                        marker.element.remove();
+                    }
+                });
+                this.markers = [];
+            }
+
+            setupControls() {
+                document.getElementById('occupancy-slider').addEventListener('input', (e) => {
+                    this.occupancyThreshold = parseInt(e.target.value);
+                    document.getElementById('occupancy-threshold').textContent = this.occupancyThreshold;
+                    this.renderVenuesBatched();
+                });
+
+                document.getElementById('scale-slider').addEventListener('input', (e) => {
+                    this.scale = parseFloat(e.target.value);
+                    document.getElementById('scale-value').textContent = `${this.scale}x`;
+                    this.renderVenuesBatched();
+                });
+
+                document.getElementById('category-filter').addEventListener('change', (e) => {
+                    this.categoryFilter = e.target.value;
+                    this.renderVenuesBatched();
+                });
+
+                document.getElementById('real-time-toggle').addEventListener('change', (e) => {
+                    this.realTimeEnabled = e.target.checked;
+                    if (this.realTimeEnabled) {
+                        this.startRealTimeUpdates();
+                    } else {
+                        this.stopRealTimeUpdates();
+                    }
+                });
+            }
+
+            focusOnHotspots() {
+                const filtered = this.filterVenues();
+                const hotspots = filtered
+                    .filter(v => (v.occupancy_level || 0) >= 7)
+                    .sort((a, b) => (b.occupancy_level || 0) - (a.occupancy_level || 0));
+
+                if (hotspots.length > 0) {
+                    const topHotspot = hotspots[0];
+                    const coords = this.parseLocation(topHotspot.location);
+                    if (!coords) return;
+
+                    try {
+                        this.map3dElement.flyCameraTo({
+                            endCamera: {
+                                center: { lat: coords.latitude, lng: coords.longitude },
+                                range: 400,
+                                tilt: 75
+                            },
+                            durationMillis: 1400
+                        });
+                    } catch (e) {
+                        this.map3dElement.setAttribute('center', `${coords.latitude},${coords.longitude}`);
+                        this.map3dElement.setAttribute('range', '400');
+                        this.map3dElement.setAttribute('tilt', '75');
+                    }
+
+                    setTimeout(() => {
+                        this.showInfoWindow(topHotspot, topHotspot.occupancy_level || 0, this.getOccupancyColor(topHotspot.occupancy_level || 0));
+                    }, 1600);
+                } else {
+                    showToast('No hotspots (occupancy ≥ 7) match your current filters. Try lowering the occupancy threshold or changing the category.');
+                }
+            }
+
+            resetView() {
+                this.closeInfoWindow();
+                try {
+                    this.map3dElement.flyCameraTo({
+                        endCamera: {
+                            center: { lat: 32.7765, lng: -79.9311 },
+                            range: 3000,
+                            tilt: 45,
+                            heading: 20
+                        },
+                        durationMillis: 1200
+                    });
+                } catch (e) {
+                    this.map3dElement.setAttribute('center', '32.7765,-79.9311');
+                    this.map3dElement.setAttribute('range', '4500');
+                    this.map3dElement.setAttribute('tilt', '52');
+                    this.map3dElement.setAttribute('heading', '20');
+                }
+            }
+
+            startRealTimeUpdates() {
+                this.stopRealTimeUpdates();
+                this.realTimeInterval = setInterval(async () => {
+                    if (!this.realTimeEnabled) return;
+                    const lastEl = document.getElementById('last-update');
+                    if (lastEl) {
+                        lastEl.textContent = 'Updating…';
+                        lastEl.closest('.status-item')?.classList.add('updating');
+                    }
+                    console.log('Refreshing venue data...');
+                    const ok = await this.loadCharlestonData();
+                    this.renderVenuesBatched();
+                    if (lastEl) {
+                        lastEl.closest('.status-item')?.classList.remove('updating');
+                        lastEl.textContent = ok ? new Date().toLocaleTimeString() : 'Update failed';
+                    }
+                    this.lastUpdate = new Date();
+                }, 30000);
+            }
+
+            stopRealTimeUpdates() {
+                if (this.realTimeInterval) {
+                    clearInterval(this.realTimeInterval);
+                    this.realTimeInterval = null;
+                }
+            }
+
+            updateVenueCount() {
+                document.getElementById('venues-count').textContent = this.venues.length;
+            }
+
+            updateActiveCount() {
+                const active = this.markers.length;
+                const el = document.getElementById('active-count');
+                if (el) el.textContent = active;
+                const hint = document.getElementById('empty-hint');
+                const hintText = document.getElementById('empty-hint-text');
+                if (hint && hintText) {
+                    if (active === 0 && this.venues.length > 0) {
+                        hint.style.display = 'block';
+                        hintText.textContent = 'No venues match your filters.';
+                    } else if (active === 0 && this.venues.length === 0) {
+                        hint.style.display = 'block';
+                        hintText.textContent = 'No Charleston venues in the feed.';
+                    } else {
+                        hint.style.display = 'none';
+                    }
+                }
+            }
+
+            hideLoading() {
+                const loading = document.getElementById('loading');
+                if (loading) loading.style.display = 'none';
+            }
+        }
+
+        // Global instance
+        let mapInstance;
+
+        // Initialize when API loads
+        function initMap() {
+            console.log('Google Maps API loaded');
+            mapInstance = new CharlestonSocialMap();
+            mapInstance.init();
+        }
+
+        // Make functions available globally
+        function focusOnHotspots() {
+            if (mapInstance) {
+                mapInstance.focusOnHotspots();
+            }
+        }
+
+        function resetView() {
+            if (mapInstance) {
+                mapInstance.resetView();
+            }
+        }
+
+        function closeInfoWindow() {
+            if (mapInstance && typeof mapInstance.closeInfoWindow === 'function') {
+                mapInstance.closeInfoWindow();
+            }
+        }
+    </script>
+</body>
+</html>

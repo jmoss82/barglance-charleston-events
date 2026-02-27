@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapbox 3D Charleston Test</title>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script>
+        let map;
+
+        // Initialize map
+        mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN'; // Get a token at https://account.mapbox.com/access-tokens/
+
+        map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/satellite-streets-v12',
+            center: [-79.9311, 32.7765], // Charleston, SC
+            zoom: 15,
+            pitch: 60, // Tilt the map for 3D effect
+            bearing: -20, // Rotate slightly for better view
+            antialias: true
+        });
+
+        map.on('load', () => {
+            // Add 3D terrain
+            map.addSource('mapbox-dem', {
+                'type': 'raster-dem',
+                'url': 'mapbox://mapbox.mapbox-terrain-dem-v1',
+                'tileSize': 512,
+                'maxzoom': 14
+            });
+            map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1.5 });
+
+            // Find the first symbol (label) layer in the style
+            const layers = map.getStyle().layers;
+            let firstSymbolId;
+            for (let i = 0; i < layers.length; i++) {
+                if (layers[i].type === 'symbol') {
+                    firstSymbolId = layers[i].id;
+                    break;
+                }
+            }
+
+            // Add 3D buildings layer BEFORE labels so labels render on top
+            // Modern, vibrant color scheme with glass and contemporary materials
+            map.addLayer({
+                'id': '3d-buildings',
+                'source': 'composite',
+                'source-layer': 'building',
+                'filter': ['==', 'extrude', 'true'],
+                'type': 'fill-extrusion',
+                'minzoom': 13,
+                'paint': {
+                    // Modern vibrant materials: glass towers, white buildings, accent colors
+                    'fill-extrusion-color': [
+                        'case',
+                        // Tall modern buildings (glass towers) - bright blue/cyan glass
+                        ['>', ['get', 'height'], 100],
+                        [
+                            'interpolate',
+                            ['linear'],
+                            ['get', 'height'],
+                            100, '#d0e8f2',    // Light sky blue glass
+                            150, '#a8d5e2',    // Bright cyan glass
+                            200, '#7ec8e3'     // Deep cyan glass
+                        ],
+                        // Medium buildings - bright white modern with accents
+                        ['>', ['get', 'height'], 40],
+                        [
+                            'match',
+                            ['%', ['to-number', ['id']], 5],
+                            0, '#ffffff',      // Pure white
+                            1, '#f5f5f5',      // Off-white
+                            2, '#e8f4f8',      // Light blue-white
+                            3, '#fff8f0',      // Warm white
+                            4, '#f0f0f0',      // Light gray
+                            '#ffffff'          // Default white
+                        ],
+                        // Low buildings - colorful modern variety
+                        [
+                            'match',
+                            ['%', ['to-number', ['id']], 6],
+                            0, '#ffffff',      // Bright white
+                            1, '#f8f8f8',      // Off-white
+                            2, '#e3f2fd',      // Light blue
+                            3, '#fff3e0',      // Light warm orange
+                            4, '#f1f8e9',      // Light green
+                            5, '#e8e8e8',      // Light gray
+                            '#ffffff'          // Default white
+                        ]
+                    ],
+                    'fill-extrusion-height': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        13, 0,
+                        13.05, ['get', 'height']
+                    ],
+                    'fill-extrusion-base': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        13, 0,
+                        13.05, ['get', 'min_height']
+                    ],
+                    'fill-extrusion-opacity': 0.92,
+                    // Strong ambient occlusion for clean, defined edges
+                    'fill-extrusion-ambient-occlusion-intensity': 0.8,
+                    'fill-extrusion-ambient-occlusion-radius': 5,
+                    // Vertical gradient for modern lighting
+                    'fill-extrusion-vertical-gradient': true
+                }
+            }, firstSymbolId); // Insert before first symbol layer
+
+            // Add sky layer for atmosphere
+            map.addLayer({
+                'id': 'sky',
+                'type': 'sky',
+                'paint': {
+                    'sky-type': 'atmosphere',
+                    'sky-atmosphere-sun': [0.0, 90.0],
+                    'sky-atmosphere-sun-intensity': 15
+                }
+            });
+
+            // Enhance label visibility - add stronger halos to all text layers
+            const style = map.getStyle();
+            style.layers.forEach((layer) => {
+                if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
+                    // Hide specific POI categories
+                    const layerId = layer.id.toLowerCase();
+
+                    // Hide business/store POIs
+                    if (layerId.includes('poi') && !layerId.includes('park')) {
+                        map.setLayoutProperty(layer.id, 'visibility', 'none');
+                        return;
+                    }
+
+                    // Hide transit stations
+                    if (layerId.includes('transit')) {
+                        map.setLayoutProperty(layer.id, 'visibility', 'none');
+                        return;
+                    }
+
+                    // Hide building numbers
+                    if (layerId.includes('building') && layerId.includes('number')) {
+                        map.setLayoutProperty(layer.id, 'visibility', 'none');
+                        return;
+                    }
+
+                    // Add strong white halo around text for better visibility
+                    map.setPaintProperty(layer.id, 'text-halo-color', '#ffffff');
+                    map.setPaintProperty(layer.id, 'text-halo-width', 2);
+                    map.setPaintProperty(layer.id, 'text-halo-blur', 1);
+
+                    // Make text color darker for better contrast
+                    map.setPaintProperty(layer.id, 'text-color', '#000000');
+                }
+            });
+
+            console.log('Mapbox 3D Charleston loaded successfully!');
+            console.log('Hidden POI categories: businesses, landmarks, transit, building numbers');
+        });
+
+        // Add navigation controls
+        map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    </script>
+</body>
+</html>
