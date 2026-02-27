@@ -1,0 +1,8 @@
+{
+  "name": "barglance-charleston-events",
+  "private": true,
+  "scripts": {
+    "build": "node generate-config.js",
+    "vercel-build": "node generate-config.js"
+  }
+}

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Charleston Events - Hotel Display</title>
+    <script src="config.js"></script>
     <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
     <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
     <style>
@@ -204,8 +205,8 @@
             return R * c;
         }
 
-        // Initialize map
-        mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN'; // Get a token at https://account.mapbox.com/access-tokens/
+        // Initialize map (token from config.js or placeholder)
+        mapboxgl.accessToken = (window.MAP_CONFIG && window.MAP_CONFIG.mapboxAccessToken) || 'YOUR_MAPBOX_ACCESS_TOKEN';
 
         map = new mapboxgl.Map({
             container: 'map',
@@ -343,9 +344,10 @@
                 console.log('Fetching events from BarGlance API...');
 
                 // Fetch events for Charleston, SC
+                const apiKey = (window.MAP_CONFIG && window.MAP_CONFIG.barGlanceApiKey) || '';
                 const response = await fetch('https://partner-api.barglance.com/api/v1/partner/events/SC/Charleston', {
                     headers: {
-                        'Authorization': 'Bearer e6514910439dd4e729579de341e9f6d6cfc05bad'
+                        'Authorization': 'Bearer ' + apiKey
                     }
                 });
 

@@ -1,7 +1,10 @@
+# Secrets (never commit) — root config.js only; api/config.js is the serverless route
+.env
+/config.js
+
 # Python
 __pycache__/
 *.py[cod]
-.env
 .venv/
 venv/
 

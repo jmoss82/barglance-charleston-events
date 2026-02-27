@@ -21,12 +21,15 @@ This display solution helps hotels keep guests informed about what's happening a
 
 ## Quick Start
 
-1. **Start the local server:**
+1. **Add your API keys (required):**  
+   Copy `config.example.js` to `config.js` and set your Mapbox token and BarGlance API key. The app loads `config.js` (it is gitignored so secrets are not committed). See `.env.example` for variable names if you use env vars elsewhere.
+
+2. **Start the local server:**
    ```bash
    python start_server.py
    ```
 
-2. **Open the display:**
+3. **Open the display:**
    ```
    http://localhost:9876/hotel_event_display.html
    ```
@@ -51,8 +54,12 @@ Share the map with partners and customers by deploying it to a public URL. The a
 2. **Go to [vercel.com](https://vercel.com)** → Sign in with GitHub.
 3. **New Project** → Import your repo.
 4. **Set Root Directory:** Click "Edit" next to the repo name and set the root to `3D Social Map` (or the folder that contains `hotel_event_display.html`).
-5. **Deploy.** Vercel will build and give you a URL. The root URL serves the map (thanks to `vercel.json`).
-6. **Share** the link (e.g. `https://your-project.vercel.app`). Optionally add a custom domain in Project Settings.
+5. **Set environment variables:** In **Settings → Environment Variables** add:
+   - `MAPBOX_ACCESS_TOKEN` — your Mapbox public token (starts with `pk.`)
+   - `BARGLANCE_API_KEY` — your BarGlance partner API key  
+   The app loads config from `/api/config`, which reads these at runtime (no build step).
+
+6. **Deploy.** Push a commit or click **Redeploy**. Share the link.
 
 **CLI option:** From the repo root, run:
 ```bash
@@ -157,8 +164,7 @@ Change how often the event list is refreshed and ended events removed (search fo
 ```
 
 ### API Keys
-**Mapbox Token:** Line 230
-**BarGlance API Key:** Line 287
+Keys are read from **config.js** (copy from `config.example.js`). Set `mapboxAccessToken` and `barGlanceApiKey`. If `config.js` is missing, the map and API will use placeholders and won’t work until you add a real `config.js`.
 
 ---
 

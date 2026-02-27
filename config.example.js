@@ -1,12 +1,12 @@
 /**
- * API keys and map styling for Charleston 3D Social Map.
+ * API keys for Charleston 3D Social Map (hotel_event_display.html and related).
  * Copy this file to config.js and fill in your values.
- * Add config.js to .gitignore so keys are not committed.
+ * config.js is in .gitignore so keys are not committed.
  */
 window.MAP_CONFIG = {
-  googleMapsApiKey: 'YOUR_GOOGLE_MAPS_API_KEY',
+  mapboxAccessToken: 'YOUR_MAPBOX_ACCESS_TOKEN',   // https://account.mapbox.com/access-tokens/
   barGlanceApiKey: 'YOUR_BARGLANCE_PARTNER_API_KEY',
-  // Optional: override the default Map ID (BarGlance style: fewer POIs, street/city labels).
-  // Default used by the app: 2430553ffa115d7e9de16e31
+  // Legacy (used by google_3d_map_charleston.html):
+  googleMapsApiKey: 'YOUR_GOOGLE_MAPS_API_KEY',
   mapId: ''
 };
