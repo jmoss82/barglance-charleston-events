@@ -341,15 +341,26 @@
 
         async function loadEvents() {
             try {
-                console.log('Fetching events from BarGlance API...');
+                console.log('Fetching events...');
 
-                // Fetch events for Charleston, SC
-                const apiKey = (window.MAP_CONFIG && window.MAP_CONFIG.barGlanceApiKey) || '';
-                const response = await fetch('https://partner-api.barglance.com/api/v1/partner/events/SC/Charleston', {
-                    headers: {
-                        'Authorization': 'Bearer ' + apiKey
+                // On Vercel: /api/events uses the key server-side. Locally: use config.js key and call BarGlance directly.
+                let response;
+                try {
+                    response = await fetch('/api/events');
+                } catch (e) {
+                    response = null;
+                }
+                if (!response || !response.ok) {
+                    const apiKey = (window.MAP_CONFIG && window.MAP_CONFIG.barGlanceApiKey) || '';
+                    if (apiKey) {
+                        response = await fetch('https://partner-api.barglance.com/api/v1/partner/events/SC/Charleston', {
+                            headers: { 'Authorization': 'Bearer ' + apiKey }
+                        });
                     }
-                });
+                }
+                if (!response || !response.ok) {
+                    throw new Error(response ? await response.text() : 'Could not load events');
+                }
 
                 const data = await response.json();
                 console.log('Raw API response:', data);
