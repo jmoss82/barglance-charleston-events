@@ -454,7 +454,7 @@
     <script>
         // Use config.js keys if present; fallback for local dev without config (avoid committing real keys to config.js)
         window.MAP_CONFIG = window.MAP_CONFIG || {};
-        var _googleKey = window.MAP_CONFIG.googleMapsApiKey || 'AIzaSyAZhB1PVOnVtne6lCNr2_5sSd5QwiV42ng';
+        var _googleKey = (window.MAP_CONFIG && window.MAP_CONFIG.googleMapsApiKey) || 'YOUR_GOOGLE_MAPS_API_KEY';
         var _barGlanceKey = window.MAP_CONFIG.barGlanceApiKey || 'e6514910439dd4e729579de341e9f6d6cfc05bad';
 
         (function() {
