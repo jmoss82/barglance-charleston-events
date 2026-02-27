@@ -44,7 +44,7 @@ The display will automatically:
 
 ## Sharing & Deployment
 
-Share the map with partners and customers by deploying it to a public URL. The app is static (HTML/JS/CSS + BarGlance API from the browser), so any static host works.
+Share the map with partners and customers by deploying it to a public URL. On Vercel, the Mapbox token is injected via an API route and the BarGlance key stays server-side (events are loaded through `/api/events`).
 
 ### Recommended: Vercel
 
@@ -57,7 +57,7 @@ Share the map with partners and customers by deploying it to a public URL. The a
 5. **Set environment variables:** In **Settings → Environment Variables** add:
    - `MAPBOX_ACCESS_TOKEN` — your Mapbox public token (starts with `pk.`)
    - `BARGLANCE_API_KEY` — your BarGlance partner API key  
-   The app loads config from `/api/config`, which reads these at runtime (no build step).
+   The Mapbox token is sent to the browser via `/api/config`. The BarGlance key is used only on the server by `/api/events` (never sent to the client). No build step.
 
 6. **Deploy.** Push a commit or click **Redeploy**. Share the link.
 
@@ -85,8 +85,8 @@ Railway is better suited to apps with a backend. For this static map, **Vercel o
 
 ### Before you share
 
-- **Mapbox token:** The token in `hotel_event_display.html` is used in the browser. For a public demo, use a token with URL restrictions (e.g. your Vercel/Pages domain) in the Mapbox dashboard so it can’t be reused on other sites.
-- **BarGlance API:** The app calls the BarGlance API from the browser. Ensure the API allows requests from your deployment origin (CORS). If you see blocked requests, the API may need to allow your deployment domain.
+- **Mapbox token:** On Vercel it’s injected via `/api/config` and used in the browser. Restrict the token by URL in the [Mapbox dashboard](https://account.mapbox.com/access-tokens/) (e.g. your Vercel domain) so it can’t be reused on other sites.
+- **BarGlance API key:** On Vercel it stays server-side; only the `/api/events` serverless function uses it. It is never sent to the browser.
 - **Logo:** Ensure `barglance-logo.png` is in the same folder as `hotel_event_display.html` so the loading screen displays correctly.
 
 ---
@@ -126,9 +126,14 @@ Each event shows:
 **Main Product:**
 - `hotel_event_display.html` - The automated event display (production ready)
 
+**Vercel (serverless):**
+- `api/config.js` - Sends Mapbox token to the browser (BarGlance key never sent)
+- `api/events.js` - Fetches events from BarGlance with your API key; browser calls this instead of BarGlance directly
+
 **Development/Testing:**
 - `mapbox_3d_charleston_test.html` - Map testing and development
 - `start_server.py` - Local HTTP server for testing
+- `config.example.js` - Copy to `config.js` for local dev (Mapbox + BarGlance keys)
 
 **Legacy Files:**
 - `google_3d_map_charleston.html` - Google 3D map prototype
@@ -141,14 +146,12 @@ Each event shows:
 ### City/Location
 Currently set to **Charleston, SC**. To change the city:
 
-1. Update the API endpoint in `hotel_event_display.html` (line ~285):
-   ```javascript
-   const response = await fetch('https://partner-api.barglance.com/api/v1/partner/events/STATE/CITY', {
-   ```
+1. Update the BarGlance URL in `api/events.js` (for Vercel) and the fallback URL in `hotel_event_display.html` (for local dev):  
+   `https://partner-api.barglance.com/api/v1/partner/events/STATE/CITY`
 
-2. Update map center coordinates (line ~230):
+2. Update map center coordinates in `hotel_event_display.html` (search for `center:`):
    ```javascript
-   center: [-79.9311, 32.7765], // Change to your city coordinates
+   center: [-79.9311, 32.7765], // Charleston, SC
    ```
 
 ### Cycle Duration
@@ -164,13 +167,14 @@ Change how often the event list is refreshed and ended events removed (search fo
 ```
 
 ### API Keys
-Keys are read from **config.js** (copy from `config.example.js`). Set `mapboxAccessToken` and `barGlanceApiKey`. If `config.js` is missing, the map and API will use placeholders and won’t work until you add a real `config.js`.
+- **Local:** Copy `config.example.js` to `config.js` and set `mapboxAccessToken` and `barGlanceApiKey`. The app uses both when running locally (e.g. `python start_server.py`).
+- **Vercel:** Set `MAPBOX_ACCESS_TOKEN` and `BARGLANCE_API_KEY` in Environment Variables. Only the Mapbox token is sent to the browser; the BarGlance key is used only by `api/events.js` on the server.
 
 ---
 
 ## How It Works
 
-1. **Loads events** from BarGlance API for the specified city
+1. **Loads events** — on Vercel via `/api/events` (BarGlance key stays server-side); locally from BarGlance using `config.js`
 2. **Filters events** - removes only events that have ended (ongoing events stay until their end time)
 3. **Shows one venue at a time** - the current venue’s name appears as a label on the map (no pin/icon)
 4. **Auto-cycles** through events:
@@ -194,8 +198,8 @@ Keys are read from **config.js** (copy from `config.example.js`). Set `mapboxAcc
 - **Labels Visible:** Streets, neighborhoods, parks; plus the **current venue name only** (highlighted with a green-tinted halo)
 
 ### Data Source
-- **API:** BarGlance Partner API
-- **Endpoint:** `/api/v1/partner/events/{state}/{city}`
+- **API:** BarGlance Partner API (called by `api/events.js` on Vercel so the key never reaches the browser)
+- **Endpoint:** `/api/v1/partner/events/{state}/{city}` (Charleston: SC/Charleston)
 - **Update Frequency:** Every 5 minutes
 - **Event Limit:** One event per venue per day (API behavior)
 
