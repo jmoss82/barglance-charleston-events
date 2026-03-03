@@ -30,10 +30,35 @@ async function loadOverridesFromBlob(token) {
   const blob = result && result.blobs && result.blobs[0] ? result.blobs[0] : null;
   if (!blob || !blob.url) return { updatedAt: '', venues: {} };
 
-  const response = await fetch(blob.url, { cache: 'no-store' });
+  const readUrl = blob.downloadUrl || blob.url;
+  const response = await fetch(readUrl, { cache: 'no-store' });
   if (!response.ok) return { updatedAt: '', venues: {} };
   const data = await response.json();
   return normalizeOverrideMap(data);
+}
+
+async function saveOverridesToBlob(token, normalized) {
+  const payload = JSON.stringify(normalized, null, 2);
+  try {
+    const blob = await put(OVERRIDES_BLOB_PATH, payload, {
+      access: 'public',
+      contentType: 'application/json',
+      addRandomSuffix: false,
+      token
+    });
+    return { blob, access: 'public' };
+  } catch (err) {
+    const message = err && err.message ? String(err.message) : '';
+    if (!/private store/i.test(message)) throw err;
+
+    const blob = await put(OVERRIDES_BLOB_PATH, payload, {
+      access: 'private',
+      contentType: 'application/json',
+      addRandomSuffix: false,
+      token
+    });
+    return { blob, access: 'private' };
+  }
 }
 
 export default async function handler(req, res) {
@@ -66,21 +91,13 @@ export default async function handler(req, res) {
       const normalized = normalizeOverrideMap(req.body || {});
       normalized.updatedAt = new Date().toISOString();
 
-      const blob = await put(
-        OVERRIDES_BLOB_PATH,
-        JSON.stringify(normalized, null, 2),
-        {
-          access: 'public',
-          contentType: 'application/json',
-          addRandomSuffix: false,
-          token
-        }
-      );
+      const { blob, access } = await saveOverridesToBlob(token, normalized);
 
       res.status(200).json({
         ok: true,
         updatedAt: normalized.updatedAt,
         url: blob.url,
+        access,
         count: Object.keys(normalized.venues || {}).length
       });
     } catch (err) {
