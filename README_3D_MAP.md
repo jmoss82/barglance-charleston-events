@@ -279,3 +279,45 @@ This is a **B2B product** designed to be sold to hotels and hospitality business
 For questions, customization requests, or deployment support, please contact the development team.
 
 
+
+---
+
+## Current Live Image Admin Workflow (March 2026)
+
+This section is the current source of truth for image updates.
+
+### Required Vercel Environment Variables
+- `BLOB_READ_WRITE_TOKEN` - required for image upload and live override storage
+- `ADMIN_PANEL_TOKEN` - required to publish overrides live from the admin panel
+
+### Live Workflow (No Git Needed For Image Changes)
+1. Open `https://<your-domain>/image_admin.html`
+2. Select a venue from the Charleston event-scoped list
+3. Paste `ADMIN_PANEL_TOKEN` into the admin token field
+4. Upload with **Choose Image** + **Upload to Vercel Blob**
+5. Optionally adjust `objectFit` and `objectPosition`
+6. Click **Save Override**
+7. Click **Publish Live**
+
+The admin panel publishes to `POST /api/image-overrides`, and the map reads live overrides from `GET /api/image-overrides`.
+
+### Notes
+- `Export image-overrides.json` is now a backup option, not the primary publish path.
+- Local draft in `localStorage` is still used while editing.
+
+### Common Upload Error
+If you see:
+`Upload failed: Unexpected token '<', "<!DOCTYPE ..." is not valid JSON`
+
+Check:
+1. Open `https://<your-domain>/api/upload-image` in your browser.
+2. Healthy route response is JSON (for GET: `{"error":"Method not allowed"}`).
+3. If HTML is returned, your route is not available on that deployment (or env vars are missing).
+4. Confirm `BLOB_READ_WRITE_TOKEN` exists for the active environment and redeploy.
+
+### Override Precedence
+1. Local draft (`localStorage`) from `image_admin.html`
+2. Live API overrides from `/api/image-overrides`
+3. `image-overrides.json` fallback file
+4. Bars API `images.hero`
+5. Event `bar.profile_picture_url` fallback
