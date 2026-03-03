@@ -233,17 +233,16 @@ To customize:
 
 ### Image Override Admin
 Use `image_admin.html` when you need to fix image framing without changing the BarGlance API.
-
 - Open `http://localhost:9876/image_admin.html` (or `/image_admin.html` on Vercel)
 - The venue list is sourced from the same city event feed as the map (currently `SC/Charleston`), so it shows venues that are in the current map rotation scope
-- Pick a venue, set:
-  - `imageUrl` (optional override URL)
-  - `objectFit` (`cover` or `contain`)
-  - `objectPosition` (e.g. `center 35%`)
-- To upload a new image file without external hosting, use **Choose Image** + **Upload to Vercel Blob** (requires `BLOB_READ_WRITE_TOKEN` on Vercel)
-- Save override (stored as a local draft in browser `localStorage`)
-- Export `image-overrides.json` and commit it to apply globally across devices (uploaded Blob URLs remain stable/public)
-
+- Day-to-day flow:
+  1. Select venue (**Step 1**)
+  2. Paste `imageUrl` (**Step 2**, recommended)
+  3. Optionally tune `objectFit` (`cover`/`contain`) and `objectPosition` (e.g. `center 35%`)
+  4. Click **Step 3: Publish This Venue Live**
+- Optional upload path: **Choose Image** + **Upload to Vercel Blob** (requires `BLOB_READ_WRITE_TOKEN`)
+- If Blob store is configured as private, direct public upload will fail; use a public image URL in Step 2 instead
+- Advanced tools (draft-only save, full publish, refresh, import/export) are available under the collapsed **Advanced tools** section
 Override precedence in `hotel_event_display.html`:
 1. Local draft (`localStorage`) from `image_admin.html`
 2. `image-overrides.json`
@@ -287,34 +286,36 @@ For questions, customization requests, or deployment support, please contact the
 This section is the current source of truth for image updates.
 
 ### Required Vercel Environment Variables
-- `BLOB_READ_WRITE_TOKEN` - required for image upload and live override storage
 - `ADMIN_PANEL_TOKEN` - required to publish overrides live from the admin panel
+- `BLOB_READ_WRITE_TOKEN` - required only for upload-via-admin (`/api/upload-image`) and live override storage (`/api/image-overrides`)
 
 ### Live Workflow (No Git Needed For Image Changes)
 1. Open `https://<your-domain>/image_admin.html`
 2. Select a venue from the Charleston event-scoped list
-3. Paste `ADMIN_PANEL_TOKEN` into the admin token field
-4. Upload with **Choose Image** + **Upload to Vercel Blob**
+3. (One-time per browser) paste `ADMIN_PANEL_TOKEN` in **Admin Access** and click **Save Token**
+4. Add image:
+   - Recommended: paste a public URL in **Step 2**
+   - Optional: **Choose Image** + **Upload to Vercel Blob**
 5. Optionally adjust `objectFit` and `objectPosition`
-6. Click **Save Override**
-7. Click **Publish Live**
-
+6. Click **Step 3: Publish This Venue Live**
 The admin panel publishes to `POST /api/image-overrides`, and the map reads live overrides from `GET /api/image-overrides`.
 
 ### Notes
 - `Export image-overrides.json` is now a backup option, not the primary publish path.
 - Local draft in `localStorage` is still used while editing.
+- Admin token is stored in browser `localStorage` after **Save Token**.
 
 ### Common Upload Error
 If you see:
-`Upload failed: Unexpected token '<', "<!DOCTYPE ..." is not valid JSON`
-
+Upload failed: Unexpected token '<', "<!DOCTYPE ..." is not valid JSON
 Check:
-1. Open `https://<your-domain>/api/upload-image` in your browser.
+1. Open https://<your-domain>/api/upload-image in your browser.
 2. Healthy route response is JSON (for GET: `{"error":"Method not allowed"}`).
 3. If HTML is returned, your route is not available on that deployment (or env vars are missing).
 4. Confirm `BLOB_READ_WRITE_TOKEN` exists for the active environment and redeploy.
-
+If you see:
+Cannot use public access on a private store
+Your Blob store is private, but upload is requesting public access. Use a public URL in **Step 2** (recommended), or change Blob access strategy before using upload.
 ### Override Precedence
 1. Local draft (`localStorage`) from `image_admin.html`
 2. Live API overrides from `/api/image-overrides`

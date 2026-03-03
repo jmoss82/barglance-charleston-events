@@ -193,41 +193,31 @@
 
         <main class="main">
             <section class="panel">
-                <h2>Admin Access</h2>
-                <div class="sub">Set your publish token once per browser. Image editing buttons stay separate from auth.</div>
-                <label class="label" for="adminToken">Admin publish token</label>
-                <input id="adminToken" type="password" placeholder="Paste ADMIN_PANEL_TOKEN once" />
-                <div class="row">
-                    <button class="btn primary" id="saveTokenBtn">Save Token</button>
-                    <button class="btn" id="clearTokenBtn">Clear Token</button>
-                </div>
-                <div class="sub" id="tokenStatus">No token saved.</div>
-            </section>
-
-            <section class="panel">
-                <h2 id="selectedTitle">Select a venue</h2>
+                <h2 id="selectedTitle">Step 1: Select a Venue</h2>
                 <div class="sub" id="selectedMeta">Choose a venue on the left to edit its image override.</div>
-                <div class="sub">Workflow: 1) Choose/upload image, 2) fine-tune fit/position, 3) click <strong>Save + Publish Live</strong>.</div>
 
-                <label class="label" for="overrideUrl">Override image URL</label>
+                <label class="label" for="overrideUrl">Step 2: Paste image URL (recommended)</label>
                 <input id="overrideUrl" type="text" placeholder="https://..." />
+
+                <div class="label">Optional upload from your computer</div>
                 <div class="row" style="margin-top:8px;">
                     <label class="btn info" for="imageFileInput">Choose Image</label>
                     <input id="imageFileInput" type="file" accept="image/*" style="display:none;" />
                     <button class="btn info" id="uploadImageBtn">Upload to Vercel Blob</button>
                 </div>
                 <div class="sub" id="uploadMeta">No file selected</div>
+                <div class="sub">If upload fails due private Blob access, use a public image URL in Step 2.</div>
 
                 <div class="grid">
                     <div>
-                        <label class="label" for="objectFit">Object fit</label>
+                        <label class="label" for="objectFit">Image fit</label>
                         <select id="objectFit">
                             <option value="cover">cover</option>
                             <option value="contain">contain</option>
                         </select>
                     </div>
                     <div>
-                        <label class="label" for="objectPosition">Object position</label>
+                        <label class="label" for="objectPosition">Image position</label>
                         <input id="objectPosition" type="text" placeholder="center center" />
                     </div>
                 </div>
@@ -236,8 +226,7 @@
                 <textarea id="notes" placeholder="Optional internal note for this venue"></textarea>
 
                 <div class="row" style="margin-top:12px;">
-                    <button class="btn primary" id="saveAndPublish">Save + Publish Live</button>
-                    <button class="btn info" id="saveOverride">Save Draft Only</button>
+                    <button class="btn primary" id="saveAndPublish">Step 3: Publish This Venue Live</button>
                     <button class="btn warn" id="removeOverride">Remove Override</button>
                 </div>
 
@@ -259,15 +248,15 @@
             </section>
 
             <section class="panel">
-                <h2>Live Sync</h2>
-                <div class="sub">Use this to publish all current draft overrides, or pull current live overrides.</div>
-                <div class="row">
-                    <button class="btn primary" id="publishLive">Publish Live</button>
-                    <button class="btn info" id="refreshLive">Refresh From Live</button>
-                </div>
-                <details style="margin-top:10px;">
-                    <summary style="cursor:pointer; color:var(--muted);">Advanced tools (backup/reset)</summary>
+                <details>
+                    <summary style="cursor:pointer; color:var(--muted);">Advanced tools (draft sync, backup, reset)</summary>
+                    <div class="sub" style="margin-top:10px;">Most users should not need these.</div>
                     <div class="row" style="margin-top:10px;">
+                        <button class="btn info" id="saveOverride">Save Draft Only</button>
+                        <button class="btn primary" id="publishLive">Publish All Draft Overrides</button>
+                        <button class="btn info" id="refreshLive">Refresh From Live</button>
+                    </div>
+                    <div class="row">
                         <button class="btn" id="clearDraft">Clear Local Draft</button>
                         <button class="btn info" id="exportJson">Export image-overrides.json</button>
                         <label class="btn" for="importJson">Import JSON</label>
@@ -275,6 +264,18 @@
                     </div>
                     <pre id="jsonPreview" style="white-space: pre-wrap; word-break: break-word; background:#0b1220; border:1px solid var(--line); border-radius:10px; padding:12px; margin:0; max-height:240px; overflow:auto;"></pre>
                 </details>
+            </section>
+
+            <section class="panel">
+                <h2>Admin Access</h2>
+                <div class="sub">Set your publish token once per browser.</div>
+                <label class="label" for="adminToken">Admin publish token</label>
+                <input id="adminToken" type="password" placeholder="Paste ADMIN_PANEL_TOKEN once" />
+                <div class="row">
+                    <button class="btn primary" id="saveTokenBtn">Save Token</button>
+                    <button class="btn" id="clearTokenBtn">Clear Token</button>
+                </div>
+                <div class="sub" id="tokenStatus">No token saved.</div>
             </section>
         </main>
     </div>
@@ -621,7 +622,7 @@
                 el.overrideUrl.value = url;
                 el.finalPreview.src = url;
                 saveOverrideForSelected({ skipStatus: true });
-                setStatus('Upload complete and saved locally. Click "Publish Live" (or "Save + Publish Live").', false);
+                setStatus('Upload complete and saved locally. Click "Step 3: Publish This Venue Live".', false);
             } catch (err) {
                 setStatus('Upload failed: ' + (err.message || 'unknown error'), true);
             }
@@ -630,7 +631,7 @@
         function loadEditorFromSelected() {
             const venue = getSelectedVenue();
             if (!venue) {
-                el.selectedTitle.textContent = 'Select a venue';
+                el.selectedTitle.textContent = 'Step 1: Select a Venue';
                 el.selectedMeta.textContent = 'Choose a venue on the left to edit its image override.';
                 el.overrideUrl.value = '';
                 el.objectFit.value = 'cover';
@@ -645,7 +646,7 @@
             const apiImage = venue.apiImageUrl;
             const finalImage = override && override.imageUrl ? override.imageUrl : apiImage;
 
-            el.selectedTitle.textContent = venue.name;
+            el.selectedTitle.textContent = `Step 1: ${venue.name}`;
             el.selectedMeta.textContent = `Bar ID ${venue.id} | ${venue.cityState}`;
             el.overrideUrl.value = override ? (override.imageUrl || '') : '';
             el.objectFit.value = override ? (override.objectFit || 'cover') : 'cover';
