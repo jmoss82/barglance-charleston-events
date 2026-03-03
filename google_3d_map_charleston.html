@@ -455,7 +455,7 @@
         // Use config.js keys if present; fallback for local dev without config (avoid committing real keys to config.js)
         window.MAP_CONFIG = window.MAP_CONFIG || {};
         var _googleKey = (window.MAP_CONFIG && window.MAP_CONFIG.googleMapsApiKey) || 'YOUR_GOOGLE_MAPS_API_KEY';
-        var _barGlanceKey = window.MAP_CONFIG.barGlanceApiKey || 'e6514910439dd4e729579de341e9f6d6cfc05bad';
+        var _barGlanceKey = window.MAP_CONFIG.barGlanceApiKey || '';
 
         (function() {
             var mapUrl = 'https://maps.googleapis.com/maps/api/js?key=' + _googleKey + '&v=beta&libraries=maps3d&callback=initMap';
@@ -472,7 +472,7 @@
     </script>
     <script>
         function getBarGlanceKey() {
-            return window.MAP_CONFIG && window.MAP_CONFIG.barGlanceApiKey ? window.MAP_CONFIG.barGlanceApiKey : 'e6514910439dd4e729579de341e9f6d6cfc05bad';
+            return window.MAP_CONFIG && window.MAP_CONFIG.barGlanceApiKey ? window.MAP_CONFIG.barGlanceApiKey : '';
         }
 
         function showError(message) {
