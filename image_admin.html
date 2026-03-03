@@ -247,7 +247,14 @@
 
             <section class="panel">
                 <h2>Publish</h2>
-                <div class="sub">For kiosk testing, local draft applies immediately in this browser. To deploy globally, export and commit `image-overrides.json`.</div>
+                <div class="sub">Save overrides locally while editing, then publish live to Vercel without a Git commit.</div>
+                <label class="label" for="adminToken">Admin publish token</label>
+                <input id="adminToken" type="text" placeholder="Set ADMIN_PANEL_TOKEN in Vercel and paste it here" />
+                <div class="row">
+                    <button class="btn primary" id="publishLive">Publish Live</button>
+                    <button class="btn info" id="refreshLive">Refresh From Live</button>
+                </div>
+                <div class="sub">Backup option:</div>
                 <div class="row">
                     <button class="btn info" id="exportJson">Export image-overrides.json</button>
                     <label class="btn" for="importJson">Import JSON</label>
@@ -261,6 +268,8 @@
     <script>
         const IMAGE_OVERRIDES_PATH = 'image-overrides.json';
         const IMAGE_OVERRIDES_LOCAL_KEY = 'barglanceImageOverridesDraft';
+        const ADMIN_TOKEN_LOCAL_KEY = 'barglanceImageAdminToken';
+        const OVERRIDES_API_PATH = '/api/image-overrides';
         const BG_BASE = 'https://partner-api.barglance.com';
         const TARGET_STATE = 'SC';
         const TARGET_CITY = 'Charleston';
@@ -288,6 +297,9 @@
             clearDraft: document.getElementById('clearDraft'),
             exportJson: document.getElementById('exportJson'),
             importJson: document.getElementById('importJson'),
+            adminToken: document.getElementById('adminToken'),
+            publishLive: document.getElementById('publishLive'),
+            refreshLive: document.getElementById('refreshLive'),
             uploadImageBtn: document.getElementById('uploadImageBtn'),
             imageFileInput: document.getElementById('imageFileInput'),
             uploadMeta: document.getElementById('uploadMeta')
@@ -367,16 +379,27 @@
             return data.events || [];
         }
 
+        async function loadOverridesFromApi() {
+            const response = await fetch(OVERRIDES_API_PATH, { cache: 'no-store' });
+            if (!response.ok) throw new Error(await response.text());
+            const json = await response.json();
+            return normalizeOverrideMap(json);
+        }
+
         async function loadOverrides() {
             let merged = { updatedAt: '', venues: {} };
 
             try {
-                const resp = await fetch(IMAGE_OVERRIDES_PATH, { cache: 'no-store' });
-                if (resp.ok) {
-                    const json = await resp.json();
-                    merged = normalizeOverrideMap(json);
-                }
-            } catch (_) {}
+                merged = await loadOverridesFromApi();
+            } catch (_) {
+                try {
+                    const resp = await fetch(IMAGE_OVERRIDES_PATH, { cache: 'no-store' });
+                    if (resp.ok) {
+                        const json = await resp.json();
+                        merged = normalizeOverrideMap(json);
+                    }
+                } catch (_) {}
+            }
 
             try {
                 const draftRaw = localStorage.getItem(IMAGE_OVERRIDES_LOCAL_KEY);
@@ -395,6 +418,52 @@
             overrides.updatedAt = new Date().toISOString();
             localStorage.setItem(IMAGE_OVERRIDES_LOCAL_KEY, JSON.stringify(overrides, null, 2));
             renderJsonPreview();
+        }
+
+        async function publishOverridesToLive() {
+            const token = String(el.adminToken.value || '').trim();
+            if (!token) {
+                setStatus('Enter admin publish token first.', true);
+                return;
+            }
+            try {
+                setStatus('Publishing overrides live...', false);
+                const response = await fetch(OVERRIDES_API_PATH, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-admin-token': token
+                    },
+                    body: JSON.stringify(overrides)
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data && data.error ? data.error : 'Publish failed');
+
+                localStorage.setItem(ADMIN_TOKEN_LOCAL_KEY, token);
+                setStatus(`Published live (${Object.keys(overrides.venues || {}).length} overrides).`, false);
+            } catch (err) {
+                setStatus('Publish failed: ' + (err.message || 'unknown error'), true);
+            }
+        }
+
+        async function refreshFromLive() {
+            try {
+                setStatus('Refreshing from live overrides...', false);
+                const live = await loadOverridesFromApi();
+                const draftRaw = localStorage.getItem(IMAGE_OVERRIDES_LOCAL_KEY);
+                overrides = live;
+                if (draftRaw) {
+                    const draft = normalizeOverrideMap(JSON.parse(draftRaw));
+                    overrides.venues = { ...overrides.venues, ...draft.venues };
+                    overrides.updatedAt = draft.updatedAt || overrides.updatedAt;
+                }
+                renderJsonPreview();
+                renderVenueList();
+                loadEditorFromSelected();
+                setStatus('Live overrides loaded.', false);
+            } catch (err) {
+                setStatus('Failed to refresh live overrides: ' + (err.message || 'unknown error'), true);
+            }
         }
 
         function renderJsonPreview() {
@@ -598,6 +667,8 @@
 
         async function init() {
             try {
+                const savedToken = localStorage.getItem(ADMIN_TOKEN_LOCAL_KEY);
+                if (savedToken) el.adminToken.value = savedToken;
                 setStatus(`Loading ${TARGET_CITY} venues from events feed...`, false);
                 const [events, bars] = await Promise.all([fetchEvents(), fetchBars()]);
                 const barsById = new Map(
@@ -664,6 +735,12 @@
         });
         el.exportJson.addEventListener('click', downloadOverridesFile);
         el.importJson.addEventListener('change', handleImportFile);
+        el.publishLive.addEventListener('click', publishOverridesToLive);
+        el.refreshLive.addEventListener('click', refreshFromLive);
+        el.adminToken.addEventListener('change', () => {
+            const token = String(el.adminToken.value || '').trim();
+            if (token) localStorage.setItem(ADMIN_TOKEN_LOCAL_KEY, token);
+        });
         el.uploadImageBtn.addEventListener('click', uploadSelectedImage);
         el.imageFileInput.addEventListener('change', () => {
             const file = el.imageFileInput.files && el.imageFileInput.files[0];

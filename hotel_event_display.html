@@ -220,6 +220,7 @@
         const CYCLE_DURATION = 12000; // 12 seconds per event
         const CARD_HIDE_DELAY = 250;
         const CARD_SHOW_DELAY = 200;
+        const IMAGE_OVERRIDES_API_PATH = '/api/image-overrides';
         const IMAGE_OVERRIDES_PATH = 'image-overrides.json';
         const IMAGE_OVERRIDES_LOCAL_KEY = 'barglanceImageOverridesDraft';
 
@@ -274,14 +275,27 @@
         async function loadImageOverrides() {
             let merged = {};
             try {
-                const response = await fetch(IMAGE_OVERRIDES_PATH, { cache: 'no-store' });
+                const response = await fetch(IMAGE_OVERRIDES_API_PATH, { cache: 'no-store' });
                 if (response.ok) {
                     const data = await response.json();
                     merged = normalizeOverrideMap(data);
-                    console.log(`Loaded ${Object.keys(merged).length} image overrides from ${IMAGE_OVERRIDES_PATH}`);
+                    console.log(`Loaded ${Object.keys(merged).length} image overrides from ${IMAGE_OVERRIDES_API_PATH}`);
                 }
             } catch (error) {
-                console.log('No image-overrides.json found or failed to load. Continuing without file overrides.');
+                console.log('Could not load live image overrides from API. Trying file fallback.');
+            }
+
+            if (Object.keys(merged).length === 0) {
+                try {
+                    const response = await fetch(IMAGE_OVERRIDES_PATH, { cache: 'no-store' });
+                    if (response.ok) {
+                        const data = await response.json();
+                        merged = normalizeOverrideMap(data);
+                        console.log(`Loaded ${Object.keys(merged).length} image overrides from ${IMAGE_OVERRIDES_PATH}`);
+                    }
+                } catch (error) {
+                    console.log('No image-overrides.json found or failed to load. Continuing without file overrides.');
+                }
             }
 
             try {
