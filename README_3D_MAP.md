@@ -44,7 +44,7 @@ The display will automatically:
 
 ## Sharing & Deployment
 
-Share the map with partners and customers by deploying it to a public URL. On Vercel, the Mapbox token is injected via an API route and the BarGlance key stays server-side (events are loaded through `/api/events`).
+Share the map with partners and customers by deploying it to a public URL. On Vercel, the Mapbox token is injected via `/api/config` and the BarGlance key stays server-side; events come from `/api/events` and venue data (for hero images) from `/api/bars`.
 
 ### Recommended: Vercel
 
@@ -57,7 +57,7 @@ Share the map with partners and customers by deploying it to a public URL. On Ve
 5. **Set environment variables:** In **Settings → Environment Variables** add:
    - `MAPBOX_ACCESS_TOKEN` — your Mapbox public token (starts with `pk.`)
    - `BARGLANCE_API_KEY` — your BarGlance partner API key  
-   The Mapbox token is sent to the browser via `/api/config`. The BarGlance key is used only on the server by `/api/events` (never sent to the client). No build step.
+   The Mapbox token is sent to the browser via `/api/config`. The BarGlance key is used only on the server by `/api/events` (events) and `/api/bars` (venue hero images); it is never sent to the client. No build step.
 
 6. **Deploy.** Push a commit or click **Redeploy**. Share the link.
 
@@ -86,7 +86,7 @@ Railway is better suited to apps with a backend. For this static map, **Vercel o
 ### Before you share
 
 - **Mapbox token:** On Vercel it’s injected via `/api/config` and used in the browser. Restrict the token by URL in the [Mapbox dashboard](https://account.mapbox.com/access-tokens/) (e.g. your Vercel domain) so it can’t be reused on other sites.
-- **BarGlance API key:** On Vercel it stays server-side; only the `/api/events` serverless function uses it. It is never sent to the browser.
+- **BarGlance API key:** On Vercel it stays server-side; only `/api/events` and `/api/bars` use it. It is never sent to the browser.
 - **Logo:** Ensure `barglance-logo.png` is in the same folder as `hotel_event_display.html` so the loading screen displays correctly.
 
 ---
@@ -102,8 +102,9 @@ Railway is better suited to apps with a backend. For this static map, **Vercel o
 ### Beautiful 3D Visuals
 - **Mapbox 3D buildings** with modern color scheme
 - **Dark map style** (night look) — Mapbox dark-v11 base
-- **Venue name label** - only the current venue is labeled on the map (green-tinted halo so it stands out); no pin/icon
-- **Clean interface** - no clutter, just essential information
+- **Venue card on the map** — a single card at the current venue showing the venue’s **hero image** (or profile image as fallback) and name, positioned just above the venue; updates as events cycle
+- **Left-side info card** — event details (title, date, time, address, etc.) unchanged
+- **Clean interface** — no clutter, just essential information
 
 ### Event Information Display
 Each event shows:
@@ -128,10 +129,12 @@ Each event shows:
 
 **Vercel (serverless):**
 - `api/config.js` - Sends Mapbox token to the browser (BarGlance key never sent)
-- `api/events.js` - Fetches events from BarGlance with your API key; browser calls this instead of BarGlance directly
+- `api/events.js` - Fetches events from BarGlance; browser loads events via this route
+- `api/bars.js` - Fetches bars from BarGlance (for venue hero images); browser loads bars via this route so hero URLs stay server-side
 
 **Development/Testing:**
 - `mapbox_3d_charleston_test.html` - Map testing and development
+- `venue_image_test.html` - One-off test page to preview BarGlance image types (profile, hero, event venue) for a given venue name
 - `start_server.py` - Local HTTP server for testing
 - `config.example.js` - Copy to `config.js` for local dev (Mapbox + BarGlance keys)
 
@@ -146,8 +149,9 @@ Each event shows:
 ### City/Location
 Currently set to **Charleston, SC**. To change the city:
 
-1. Update the BarGlance URL in `api/events.js` (for Vercel) and the fallback URL in `hotel_event_display.html` (for local dev):  
-   `https://partner-api.barglance.com/api/v1/partner/events/STATE/CITY`
+1. Update the BarGlance URLs in `api/events.js` and `api/bars.js` (for Vercel) and the fallback URLs in `hotel_event_display.html` (for local dev):  
+   - Events: `https://partner-api.barglance.com/api/v1/partner/events/STATE/CITY`  
+   - Bars: `https://partner-api.barglance.com/api/v1/partner/bars`
 
 2. Update map center coordinates in `hotel_event_display.html` (search for `center:`):
    ```javascript
@@ -168,7 +172,7 @@ Change how often the event list is refreshed and ended events removed (search fo
 
 ### API Keys
 - **Local:** Copy `config.example.js` to `config.js` and set `mapboxAccessToken` and `barGlanceApiKey`. The app uses both when running locally (e.g. `python start_server.py`).
-- **Vercel:** Set `MAPBOX_ACCESS_TOKEN` and `BARGLANCE_API_KEY` in Environment Variables. Only the Mapbox token is sent to the browser; the BarGlance key is used only by `api/events.js` on the server.
+- **Vercel:** Set `MAPBOX_ACCESS_TOKEN` and `BARGLANCE_API_KEY` in Environment Variables. Only the Mapbox token is sent to the browser; the BarGlance key is used only by `api/events.js` and `api/bars.js` on the server.
 
 ---
 
@@ -195,13 +199,12 @@ Change how often the event list is refreshed and ended events removed (search fo
 - **Terrain:** Enabled with 1.5x exaggeration
 - **Camera:** 60° pitch, aerial view
 - **POIs Hidden:** Business names, landmarks, transit, building numbers
-- **Labels Visible:** Streets, neighborhoods, parks; plus the **current venue name only** (highlighted with a green-tinted halo)
+- **Venue card on map:** One marker per current venue — hero image (from bars API) with venue name below; falls back to event `profile_picture_url` when hero is missing; image URLs are forced to HTTPS for mixed-content safety
+- **Labels visible:** Streets, neighborhoods, parks (the venue card replaces the old text-only label)
 
 ### Data Source
-- **API:** BarGlance Partner API (called by `api/events.js` on Vercel so the key never reaches the browser)
-- **Endpoint:** `/api/v1/partner/events/{state}/{city}` (Charleston: SC/Charleston)
-- **Update Frequency:** Every 5 minutes
-- **Event Limit:** One event per venue per day (API behavior)
+- **Events API:** BarGlance Partner API; called by `api/events.js` on Vercel so the key never reaches the browser. Endpoint: `/api/v1/partner/events/{state}/{city}` (Charleston: SC/Charleston). Update frequency: every 5 minutes. One event per venue per day (API behavior).
+- **Bars API:** Called by `api/bars.js` on Vercel; used to resolve `images.hero` URLs for the venue card. Fallback: event `bar.profile_picture_url` when a bar has no hero in the bars response.
 
 ### Browser Requirements
 - Modern browser with WebGL support
@@ -220,8 +223,8 @@ The display is designed to be hotel-friendly with:
 
 To customize:
 - **Colors:** Modify CSS in the `<style>` section (e.g. `.category-tag` for the event-type pill, currently neutral gray)
-- **Card position:** Adjust `.event-info-card` CSS (currently top-left)
-- **Venue label on map:** The highlighted venue name is a symbol layer `event-label`; adjust its `paint` (e.g. `text-halo-color`, `text-size`) in the JavaScript where the layer is added
+- **Left info card position:** Adjust `.event-info-card` CSS (currently top-left, vertically centered)
+- **Venue card on map:** The card is a Mapbox Marker; styles are `.venue-marker`, `.venue-marker-img`, `.venue-marker-name`. Position offset is set in JS with `setOffset([0, -50])` (pixels above the venue point).
 - **Building colors:** Edit `fill-extrusion-color` paint properties in the 3D buildings layer
 
 ### Future Enhancements
