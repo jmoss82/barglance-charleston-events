@@ -193,8 +193,21 @@
 
         <main class="main">
             <section class="panel">
+                <h2>Admin Access</h2>
+                <div class="sub">Set your publish token once per browser. Image editing buttons stay separate from auth.</div>
+                <label class="label" for="adminToken">Admin publish token</label>
+                <input id="adminToken" type="password" placeholder="Paste ADMIN_PANEL_TOKEN once" />
+                <div class="row">
+                    <button class="btn primary" id="saveTokenBtn">Save Token</button>
+                    <button class="btn" id="clearTokenBtn">Clear Token</button>
+                </div>
+                <div class="sub" id="tokenStatus">No token saved.</div>
+            </section>
+
+            <section class="panel">
                 <h2 id="selectedTitle">Select a venue</h2>
                 <div class="sub" id="selectedMeta">Choose a venue on the left to edit its image override.</div>
+                <div class="sub">Workflow: 1) Choose/upload image, 2) fine-tune fit/position, 3) click <strong>Save + Publish Live</strong>.</div>
 
                 <label class="label" for="overrideUrl">Override image URL</label>
                 <input id="overrideUrl" type="text" placeholder="https://..." />
@@ -223,9 +236,9 @@
                 <textarea id="notes" placeholder="Optional internal note for this venue"></textarea>
 
                 <div class="row" style="margin-top:12px;">
-                    <button class="btn primary" id="saveOverride">Save Override</button>
+                    <button class="btn primary" id="saveAndPublish">Save + Publish Live</button>
+                    <button class="btn info" id="saveOverride">Save Draft Only</button>
                     <button class="btn warn" id="removeOverride">Remove Override</button>
-                    <button class="btn" id="clearDraft">Clear Local Draft</button>
                 </div>
 
                 <div class="status" id="status"></div>
@@ -246,21 +259,22 @@
             </section>
 
             <section class="panel">
-                <h2>Publish</h2>
-                <div class="sub">Save overrides locally while editing, then publish live to Vercel without a Git commit.</div>
-                <label class="label" for="adminToken">Admin publish token</label>
-                <input id="adminToken" type="text" placeholder="Set ADMIN_PANEL_TOKEN in Vercel and paste it here" />
+                <h2>Live Sync</h2>
+                <div class="sub">Use this to publish all current draft overrides, or pull current live overrides.</div>
                 <div class="row">
                     <button class="btn primary" id="publishLive">Publish Live</button>
                     <button class="btn info" id="refreshLive">Refresh From Live</button>
                 </div>
-                <div class="sub">Backup option:</div>
-                <div class="row">
-                    <button class="btn info" id="exportJson">Export image-overrides.json</button>
-                    <label class="btn" for="importJson">Import JSON</label>
-                    <input id="importJson" type="file" accept="application/json" style="display:none;" />
-                </div>
-                <pre id="jsonPreview" style="white-space: pre-wrap; word-break: break-word; background:#0b1220; border:1px solid var(--line); border-radius:10px; padding:12px; margin:0; max-height:240px; overflow:auto;"></pre>
+                <details style="margin-top:10px;">
+                    <summary style="cursor:pointer; color:var(--muted);">Advanced tools (backup/reset)</summary>
+                    <div class="row" style="margin-top:10px;">
+                        <button class="btn" id="clearDraft">Clear Local Draft</button>
+                        <button class="btn info" id="exportJson">Export image-overrides.json</button>
+                        <label class="btn" for="importJson">Import JSON</label>
+                        <input id="importJson" type="file" accept="application/json" style="display:none;" />
+                    </div>
+                    <pre id="jsonPreview" style="white-space: pre-wrap; word-break: break-word; background:#0b1220; border:1px solid var(--line); border-radius:10px; padding:12px; margin:0; max-height:240px; overflow:auto;"></pre>
+                </details>
             </section>
         </main>
     </div>
@@ -293,17 +307,64 @@
             finalPreview: document.getElementById('finalPreview'),
             jsonPreview: document.getElementById('jsonPreview'),
             saveOverride: document.getElementById('saveOverride'),
+            saveAndPublish: document.getElementById('saveAndPublish'),
             removeOverride: document.getElementById('removeOverride'),
             clearDraft: document.getElementById('clearDraft'),
             exportJson: document.getElementById('exportJson'),
             importJson: document.getElementById('importJson'),
             adminToken: document.getElementById('adminToken'),
+            saveTokenBtn: document.getElementById('saveTokenBtn'),
+            clearTokenBtn: document.getElementById('clearTokenBtn'),
+            tokenStatus: document.getElementById('tokenStatus'),
             publishLive: document.getElementById('publishLive'),
             refreshLive: document.getElementById('refreshLive'),
             uploadImageBtn: document.getElementById('uploadImageBtn'),
             imageFileInput: document.getElementById('imageFileInput'),
             uploadMeta: document.getElementById('uploadMeta')
         };
+
+        function getStoredAdminToken() {
+            return String(localStorage.getItem(ADMIN_TOKEN_LOCAL_KEY) || '').trim();
+        }
+
+        function getAdminToken() {
+            const typed = String(el.adminToken.value || '').trim();
+            if (typed) return typed;
+            return getStoredAdminToken();
+        }
+
+        function maskToken(token) {
+            if (!token) return '';
+            if (token.length <= 8) return '********';
+            return `${token.slice(0, 6)}...${token.slice(-4)}`;
+        }
+
+        function updateTokenStatus() {
+            const token = getStoredAdminToken();
+            if (!token) {
+                el.tokenStatus.textContent = 'No token saved.';
+                return;
+            }
+            el.tokenStatus.textContent = `Token saved locally: ${maskToken(token)}`;
+        }
+
+        function saveAdminToken() {
+            const token = String(el.adminToken.value || '').trim();
+            if (!token) {
+                el.tokenStatus.textContent = 'Paste a token to save.';
+                return;
+            }
+            localStorage.setItem(ADMIN_TOKEN_LOCAL_KEY, token);
+            updateTokenStatus();
+            setStatus('Admin token saved locally for this browser.', false);
+        }
+
+        function clearAdminToken() {
+            localStorage.removeItem(ADMIN_TOKEN_LOCAL_KEY);
+            el.adminToken.value = '';
+            updateTokenStatus();
+            setStatus('Cleared saved admin token.', false);
+        }
 
         function cleanImageUrl(value) {
             if (!value) return '';
@@ -421,9 +482,9 @@
         }
 
         async function publishOverridesToLive() {
-            const token = String(el.adminToken.value || '').trim();
+            const token = getAdminToken();
             if (!token) {
-                setStatus('Enter admin publish token first.', true);
+                setStatus('No admin token found. Set it in Admin Access first.', true);
                 return;
             }
             try {
@@ -440,6 +501,7 @@
                 if (!response.ok) throw new Error(data && data.error ? data.error : 'Publish failed');
 
                 localStorage.setItem(ADMIN_TOKEN_LOCAL_KEY, token);
+                updateTokenStatus();
                 setStatus(`Published live (${Object.keys(overrides.venues || {}).length} overrides).`, false);
             } catch (err) {
                 setStatus('Publish failed: ' + (err.message || 'unknown error'), true);
@@ -558,7 +620,8 @@
                 const url = cleanImageUrl(data.url);
                 el.overrideUrl.value = url;
                 el.finalPreview.src = url;
-                setStatus('Upload complete. Click "Save Override" to persist for this venue.', false);
+                saveOverrideForSelected({ skipStatus: true });
+                setStatus('Upload complete and saved locally. Click "Publish Live" (or "Save + Publish Live").', false);
             } catch (err) {
                 setStatus('Upload failed: ' + (err.message || 'unknown error'), true);
             }
@@ -596,11 +659,12 @@
             el.finalPreview.style.objectPosition = el.objectPosition.value || 'center center';
         }
 
-        function saveOverrideForSelected() {
+        function saveOverrideForSelected(options = {}) {
+            const skipStatus = !!options.skipStatus;
             const venue = getSelectedVenue();
             if (!venue) {
-                setStatus('Select a venue first.', true);
-                return;
+                if (!skipStatus) setStatus('Select a venue first.', true);
+                return false;
             }
 
             const imageUrl = cleanImageUrl(el.overrideUrl.value);
@@ -617,7 +681,22 @@
             persistDraft();
             renderVenueList();
             loadEditorFromSelected();
-            setStatus(`Saved override for ${venue.name}.`, false);
+            if (!skipStatus) setStatus(`Saved override for ${venue.name}.`, false);
+            return true;
+        }
+
+        async function saveAndPublishSelected() {
+            const token = getAdminToken();
+            if (!token) {
+                setStatus('No admin token found. Set it in Admin Access first.', true);
+                return;
+            }
+
+            const saved = saveOverrideForSelected({ skipStatus: true });
+            if (!saved) return;
+
+            setStatus('Saved locally. Publishing live...', false);
+            await publishOverridesToLive();
         }
 
         function removeOverrideForSelected() {
@@ -669,6 +748,7 @@
             try {
                 const savedToken = localStorage.getItem(ADMIN_TOKEN_LOCAL_KEY);
                 if (savedToken) el.adminToken.value = savedToken;
+                updateTokenStatus();
                 setStatus(`Loading ${TARGET_CITY} venues from events feed...`, false);
                 const [events, bars] = await Promise.all([fetchEvents(), fetchBars()]);
                 const barsById = new Map(
@@ -724,6 +804,7 @@
 
         el.search.addEventListener('input', renderVenueList);
         el.saveOverride.addEventListener('click', saveOverrideForSelected);
+        el.saveAndPublish.addEventListener('click', saveAndPublishSelected);
         el.removeOverride.addEventListener('click', removeOverrideForSelected);
         el.clearDraft.addEventListener('click', () => {
             localStorage.removeItem(IMAGE_OVERRIDES_LOCAL_KEY);
@@ -735,11 +816,15 @@
         });
         el.exportJson.addEventListener('click', downloadOverridesFile);
         el.importJson.addEventListener('change', handleImportFile);
+        el.saveTokenBtn.addEventListener('click', saveAdminToken);
+        el.clearTokenBtn.addEventListener('click', clearAdminToken);
         el.publishLive.addEventListener('click', publishOverridesToLive);
         el.refreshLive.addEventListener('click', refreshFromLive);
         el.adminToken.addEventListener('change', () => {
-            const token = String(el.adminToken.value || '').trim();
-            if (token) localStorage.setItem(ADMIN_TOKEN_LOCAL_KEY, token);
+            updateTokenStatus();
+        });
+        el.adminToken.addEventListener('input', () => {
+            updateTokenStatus();
         });
         el.uploadImageBtn.addEventListener('click', uploadSelectedImage);
         el.imageFileInput.addEventListener('change', () => {
