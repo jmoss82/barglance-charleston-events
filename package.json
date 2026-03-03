@@ -1,6 +1,9 @@
 {
   "name": "barglance-charleston-events",
   "private": true,
+  "dependencies": {
+    "@vercel/blob": "^0.27.0"
+  },
   "scripts": {
     "build": "node generate-config.js",
     "vercel-build": "node generate-config.js"

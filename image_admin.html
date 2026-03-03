@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BarGlance Image Admin</title>
+    <script src="config.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #111827;
+            --card: #1f2937;
+            --line: #374151;
+            --text: #f3f4f6;
+            --muted: #9ca3af;
+            --accent: #10b981;
+            --accent-2: #22d3ee;
+            --warn: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: radial-gradient(circle at 10% 0%, #111827 0%, var(--bg) 45%, #020617 100%);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            border-right: 1px solid var(--line);
+            background: rgba(17, 24, 39, 0.94);
+            padding: 16px;
+            overflow: auto;
+        }
+
+        .main {
+            padding: 20px;
+            overflow: auto;
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 22px;
+        }
+
+        .sub {
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 14px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        input[type="text"], select, textarea {
+            width: 100%;
+            background: #0b1220;
+            color: var(--text);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 14px;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 72px;
+        }
+
+        .btn {
+            background: #111827;
+            color: var(--text);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 9px 12px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn.primary { border-color: var(--accent); background: rgba(16, 185, 129, 0.16); }
+        .btn.info { border-color: var(--accent-2); background: rgba(34, 211, 238, 0.16); }
+        .btn.warn { border-color: var(--warn); background: rgba(245, 158, 11, 0.16); }
+        .btn.danger { border-color: var(--danger); background: rgba(239, 68, 68, 0.16); }
+
+        .count {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .list {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            max-height: calc(100vh - 250px);
+            overflow: auto;
+            background: #0b1220;
+        }
+
+        .item {
+            border-bottom: 1px solid #1f2937;
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        .item:last-child { border-bottom: 0; }
+        .item:hover { background: #111827; }
+        .item.active { background: rgba(16, 185, 129, 0.18); }
+
+        .item-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .item-meta {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .panel {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: rgba(17, 24, 39, 0.85);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .panel h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .preview {
+            width: 100%;
+            height: 220px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #020617;
+            object-fit: cover;
+            object-position: center center;
+        }
+
+        .status {
+            font-size: 13px;
+            color: var(--accent-2);
+            min-height: 20px;
+        }
+
+        .label {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin: 10px 0 6px;
+        }
+
+        @media (max-width: 980px) {
+            .layout { grid-template-columns: 1fr; }
+            .sidebar { border-right: 0; border-bottom: 1px solid var(--line); max-height: 46vh; }
+            .list { max-height: 28vh; }
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h1>Image Admin</h1>
+            <div class="sub">Override venue marker images and crop settings without changing the API.</div>
+
+            <input id="search" type="text" placeholder="Search venue name..." />
+            <div class="count" id="venueCount">Loading venues...</div>
+            <div class="list" id="venueList"></div>
+        </aside>
+
+        <main class="main">
+            <section class="panel">
+                <h2 id="selectedTitle">Select a venue</h2>
+                <div class="sub" id="selectedMeta">Choose a venue on the left to edit its image override.</div>
+
+                <label class="label" for="overrideUrl">Override image URL</label>
+                <input id="overrideUrl" type="text" placeholder="https://..." />
+                <div class="row" style="margin-top:8px;">
+                    <label class="btn info" for="imageFileInput">Choose Image</label>
+                    <input id="imageFileInput" type="file" accept="image/*" style="display:none;" />
+                    <button class="btn info" id="uploadImageBtn">Upload to Vercel Blob</button>
+                </div>
+                <div class="sub" id="uploadMeta">No file selected</div>
+
+                <div class="grid">
+                    <div>
+                        <label class="label" for="objectFit">Object fit</label>
+                        <select id="objectFit">
+                            <option value="cover">cover</option>
+                            <option value="contain">contain</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label" for="objectPosition">Object position</label>
+                        <input id="objectPosition" type="text" placeholder="center center" />
+                    </div>
+                </div>
+
+                <label class="label" for="notes">Notes (optional)</label>
+                <textarea id="notes" placeholder="Optional internal note for this venue"></textarea>
+
+                <div class="row" style="margin-top:12px;">
+                    <button class="btn primary" id="saveOverride">Save Override</button>
+                    <button class="btn warn" id="removeOverride">Remove Override</button>
+                    <button class="btn" id="clearDraft">Clear Local Draft</button>
+                </div>
+
+                <div class="status" id="status"></div>
+            </section>
+
+            <section class="panel">
+                <h2>Preview</h2>
+                <div class="grid">
+                    <div>
+                        <div class="label">API hero/fallback</div>
+                        <img id="apiPreview" class="preview" alt="API image preview" />
+                    </div>
+                    <div>
+                        <div class="label">Final image with override</div>
+                        <img id="finalPreview" class="preview" alt="Final image preview" />
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h2>Publish</h2>
+                <div class="sub">For kiosk testing, local draft applies immediately in this browser. To deploy globally, export and commit `image-overrides.json`.</div>
+                <div class="row">
+                    <button class="btn info" id="exportJson">Export image-overrides.json</button>
+                    <label class="btn" for="importJson">Import JSON</label>
+                    <input id="importJson" type="file" accept="application/json" style="display:none;" />
+                </div>
+                <pre id="jsonPreview" style="white-space: pre-wrap; word-break: break-word; background:#0b1220; border:1px solid var(--line); border-radius:10px; padding:12px; margin:0; max-height:240px; overflow:auto;"></pre>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const IMAGE_OVERRIDES_PATH = 'image-overrides.json';
+        const IMAGE_OVERRIDES_LOCAL_KEY = 'barglanceImageOverridesDraft';
+        const BG_BASE = 'https://partner-api.barglance.com';
+        const TARGET_STATE = 'SC';
+        const TARGET_CITY = 'Charleston';
+
+        let venues = [];
+        let selectedVenueId = '';
+        let overrides = { updatedAt: '', venues: {} };
+
+        const el = {
+            search: document.getElementById('search'),
+            venueCount: document.getElementById('venueCount'),
+            venueList: document.getElementById('venueList'),
+            selectedTitle: document.getElementById('selectedTitle'),
+            selectedMeta: document.getElementById('selectedMeta'),
+            overrideUrl: document.getElementById('overrideUrl'),
+            objectFit: document.getElementById('objectFit'),
+            objectPosition: document.getElementById('objectPosition'),
+            notes: document.getElementById('notes'),
+            status: document.getElementById('status'),
+            apiPreview: document.getElementById('apiPreview'),
+            finalPreview: document.getElementById('finalPreview'),
+            jsonPreview: document.getElementById('jsonPreview'),
+            saveOverride: document.getElementById('saveOverride'),
+            removeOverride: document.getElementById('removeOverride'),
+            clearDraft: document.getElementById('clearDraft'),
+            exportJson: document.getElementById('exportJson'),
+            importJson: document.getElementById('importJson'),
+            uploadImageBtn: document.getElementById('uploadImageBtn'),
+            imageFileInput: document.getElementById('imageFileInput'),
+            uploadMeta: document.getElementById('uploadMeta')
+        };
+
+        function cleanImageUrl(value) {
+            if (!value) return '';
+            return String(value).trim().replace(/^http:\/\//i, 'https://');
+        }
+
+        function normalizeOverrideMap(input) {
+            if (!input || typeof input !== 'object') return { updatedAt: '', venues: {} };
+            const raw = input.venues && typeof input.venues === 'object' ? input.venues : input;
+            const normalized = {};
+            Object.keys(raw).forEach((key) => {
+                const item = raw[key];
+                if (!item || typeof item !== 'object') return;
+                const id = String(key).trim();
+                if (!id) return;
+                normalized[id] = {
+                    imageUrl: cleanImageUrl(item.imageUrl || item.heroUrl || ''),
+                    objectFit: item.objectFit === 'contain' ? 'contain' : 'cover',
+                    objectPosition: item.objectPosition ? String(item.objectPosition).trim() : 'center center',
+                    notes: item.notes ? String(item.notes).trim() : ''
+                };
+            });
+            return { updatedAt: input.updatedAt || '', venues: normalized };
+        }
+
+        function getBarImageUrl(bar) {
+            if (bar && bar.images && bar.images.hero) {
+                const h = String(bar.images.hero);
+                return cleanImageUrl(h.startsWith('http') ? h : (BG_BASE + (h.startsWith('/') ? '' : '/') + h));
+            }
+            if (bar && bar.profile_picture_url) {
+                const p = String(bar.profile_picture_url);
+                return cleanImageUrl(p.startsWith('http') ? p : (BG_BASE + (p.startsWith('/') ? '' : '/') + p));
+            }
+            return '';
+        }
+
+        async function fetchBars() {
+            const apiKey = (window.MAP_CONFIG && window.MAP_CONFIG.barGlanceApiKey) || '';
+            let response;
+            try {
+                response = await fetch('/api/bars');
+            } catch (_) { response = null; }
+            if (!response || !response.ok) {
+                if (!apiKey) throw new Error('No BarGlance key in config.js and /api/bars unavailable.');
+                response = await fetch('https://partner-api.barglance.com/api/v1/partner/bars', {
+                    headers: { Authorization: 'Bearer ' + apiKey }
+                });
+            }
+            if (!response.ok) {
+                throw new Error(await response.text());
+            }
+            const data = await response.json();
+            return data.bars || [];
+        }
+
+        async function fetchEvents() {
+            const apiKey = (window.MAP_CONFIG && window.MAP_CONFIG.barGlanceApiKey) || '';
+            let response;
+            try {
+                response = await fetch('/api/events');
+            } catch (_) { response = null; }
+            if (!response || !response.ok) {
+                if (!apiKey) throw new Error('No BarGlance key in config.js and /api/events unavailable.');
+                response = await fetch(`https://partner-api.barglance.com/api/v1/partner/events/${TARGET_STATE}/${TARGET_CITY}`, {
+                    headers: { Authorization: 'Bearer ' + apiKey }
+                });
+            }
+            if (!response.ok) {
+                throw new Error(await response.text());
+            }
+            const data = await response.json();
+            return data.events || [];
+        }
+
+        async function loadOverrides() {
+            let merged = { updatedAt: '', venues: {} };
+
+            try {
+                const resp = await fetch(IMAGE_OVERRIDES_PATH, { cache: 'no-store' });
+                if (resp.ok) {
+                    const json = await resp.json();
+                    merged = normalizeOverrideMap(json);
+                }
+            } catch (_) {}
+
+            try {
+                const draftRaw = localStorage.getItem(IMAGE_OVERRIDES_LOCAL_KEY);
+                if (draftRaw) {
+                    const draft = normalizeOverrideMap(JSON.parse(draftRaw));
+                    merged.venues = { ...merged.venues, ...draft.venues };
+                    merged.updatedAt = draft.updatedAt || merged.updatedAt;
+                }
+            } catch (_) {}
+
+            overrides = merged;
+            renderJsonPreview();
+        }
+
+        function persistDraft() {
+            overrides.updatedAt = new Date().toISOString();
+            localStorage.setItem(IMAGE_OVERRIDES_LOCAL_KEY, JSON.stringify(overrides, null, 2));
+            renderJsonPreview();
+        }
+
+        function renderJsonPreview() {
+            el.jsonPreview.textContent = JSON.stringify(overrides, null, 2);
+        }
+
+        function getSelectedVenue() {
+            if (!selectedVenueId) return null;
+            return venues.find(v => v.id === selectedVenueId) || null;
+        }
+
+        function renderVenueList() {
+            const q = el.search.value.trim().toLowerCase();
+            const filtered = venues.filter(v => !q || v.name.toLowerCase().includes(q));
+            el.venueCount.textContent = `${filtered.length} venues`;
+            el.venueList.innerHTML = filtered.map(v => {
+                const hasOverride = !!overrides.venues[v.id];
+                const active = v.id === selectedVenueId ? ' active' : '';
+                return `<div class="item${active}" data-id="${v.id}">
+                    <div class="item-title">${v.name}</div>
+                    <div class="item-meta">ID ${v.id}${hasOverride ? ' | override set' : ''}</div>
+                </div>`;
+            }).join('');
+
+            Array.from(el.venueList.querySelectorAll('.item')).forEach(node => {
+                node.addEventListener('click', () => {
+                    selectedVenueId = node.getAttribute('data-id') || '';
+                    renderVenueList();
+                    loadEditorFromSelected();
+                });
+            });
+        }
+
+        function setStatus(message, isError) {
+            el.status.style.color = isError ? '#ef4444' : '#22d3ee';
+            el.status.textContent = message;
+        }
+
+        function readFileAsDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ''));
+                reader.onerror = () => reject(new Error('Failed to read file.'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function uploadSelectedImage() {
+            const venue = getSelectedVenue();
+            if (!venue) {
+                setStatus('Select a venue first.', true);
+                return;
+            }
+
+            const file = el.imageFileInput.files && el.imageFileInput.files[0];
+            if (!file) {
+                setStatus('Choose an image file first.', true);
+                return;
+            }
+
+            if (!file.type || !file.type.startsWith('image/')) {
+                setStatus('Only image files are supported.', true);
+                return;
+            }
+
+            const MAX_MB = 6;
+            if (file.size > MAX_MB * 1024 * 1024) {
+                setStatus(`File is too large. Max ${MAX_MB}MB.`, true);
+                return;
+            }
+
+            try {
+                setStatus('Uploading image to Vercel Blob...', false);
+                const dataUrl = await readFileAsDataUrl(file);
+                const response = await fetch('/api/upload-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        venueId: venue.id,
+                        venueName: venue.name,
+                        filename: file.name,
+                        contentType: file.type,
+                        dataUrl
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.url) {
+                    throw new Error(data && data.error ? data.error : 'Upload failed');
+                }
+
+                const url = cleanImageUrl(data.url);
+                el.overrideUrl.value = url;
+                el.finalPreview.src = url;
+                setStatus('Upload complete. Click "Save Override" to persist for this venue.', false);
+            } catch (err) {
+                setStatus('Upload failed: ' + (err.message || 'unknown error'), true);
+            }
+        }
+
+        function loadEditorFromSelected() {
+            const venue = getSelectedVenue();
+            if (!venue) {
+                el.selectedTitle.textContent = 'Select a venue';
+                el.selectedMeta.textContent = 'Choose a venue on the left to edit its image override.';
+                el.overrideUrl.value = '';
+                el.objectFit.value = 'cover';
+                el.objectPosition.value = 'center center';
+                el.notes.value = '';
+                el.apiPreview.removeAttribute('src');
+                el.finalPreview.removeAttribute('src');
+                return;
+            }
+
+            const override = overrides.venues[venue.id] || null;
+            const apiImage = venue.apiImageUrl;
+            const finalImage = override && override.imageUrl ? override.imageUrl : apiImage;
+
+            el.selectedTitle.textContent = venue.name;
+            el.selectedMeta.textContent = `Bar ID ${venue.id} | ${venue.cityState}`;
+            el.overrideUrl.value = override ? (override.imageUrl || '') : '';
+            el.objectFit.value = override ? (override.objectFit || 'cover') : 'cover';
+            el.objectPosition.value = override ? (override.objectPosition || 'center center') : 'center center';
+            el.notes.value = override ? (override.notes || '') : '';
+
+            if (apiImage) el.apiPreview.src = apiImage; else el.apiPreview.removeAttribute('src');
+            if (finalImage) el.finalPreview.src = finalImage; else el.finalPreview.removeAttribute('src');
+
+            el.finalPreview.style.objectFit = el.objectFit.value;
+            el.finalPreview.style.objectPosition = el.objectPosition.value || 'center center';
+        }
+
+        function saveOverrideForSelected() {
+            const venue = getSelectedVenue();
+            if (!venue) {
+                setStatus('Select a venue first.', true);
+                return;
+            }
+
+            const imageUrl = cleanImageUrl(el.overrideUrl.value);
+            const objectFit = el.objectFit.value === 'contain' ? 'contain' : 'cover';
+            const objectPosition = (el.objectPosition.value || 'center center').trim();
+            const notes = el.notes.value.trim();
+
+            overrides.venues[venue.id] = {
+                imageUrl,
+                objectFit,
+                objectPosition,
+                notes
+            };
+            persistDraft();
+            renderVenueList();
+            loadEditorFromSelected();
+            setStatus(`Saved override for ${venue.name}.`, false);
+        }
+
+        function removeOverrideForSelected() {
+            const venue = getSelectedVenue();
+            if (!venue) {
+                setStatus('Select a venue first.', true);
+                return;
+            }
+            delete overrides.venues[venue.id];
+            persistDraft();
+            renderVenueList();
+            loadEditorFromSelected();
+            setStatus(`Removed override for ${venue.name}.`, false);
+        }
+
+        function downloadOverridesFile() {
+            const fileData = JSON.stringify(overrides, null, 2);
+            const blob = new Blob([fileData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'image-overrides.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            setStatus('Exported image-overrides.json.', false);
+        }
+
+        async function handleImportFile(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const parsed = normalizeOverrideMap(JSON.parse(text));
+                overrides = parsed;
+                persistDraft();
+                renderVenueList();
+                loadEditorFromSelected();
+                setStatus('Imported JSON into local draft.', false);
+            } catch (err) {
+                setStatus('Invalid JSON file: ' + (err.message || 'parse error'), true);
+            } finally {
+                el.importJson.value = '';
+            }
+        }
+
+        async function init() {
+            try {
+                setStatus(`Loading ${TARGET_CITY} venues from events feed...`, false);
+                const [events, bars] = await Promise.all([fetchEvents(), fetchBars()]);
+                const barsById = new Map(
+                    bars
+                        .filter(b => b && b.id)
+                        .map(b => [String(b.id), b])
+                );
+
+                const now = new Date();
+                const upcomingEvents = events.filter((event) => {
+                    const endTime = event && event.end_at ? new Date(event.end_at) : null;
+                    if (endTime && !Number.isNaN(endTime.getTime())) return endTime >= now;
+                    const startTime = event && event.start_at ? new Date(event.start_at) : null;
+                    return !!startTime && !Number.isNaN(startTime.getTime()) && startTime >= now;
+                });
+
+                const venueById = new Map();
+                upcomingEvents.forEach((event) => {
+                    const eventBar = event && event.bar ? event.bar : null;
+                    if (!eventBar || !eventBar.id || !eventBar.name) return;
+                    const id = String(eventBar.id);
+                    if (venueById.has(id)) return;
+
+                    const barRecord = barsById.get(id) || null;
+                    const city = eventBar.city || (barRecord && barRecord.city && barRecord.city.name) || '';
+                    const state = eventBar.state || (barRecord && barRecord.city && barRecord.city.state) || '';
+
+                    let apiImageUrl = barRecord ? getBarImageUrl(barRecord) : '';
+                    if (!apiImageUrl && eventBar.profile_picture_url) {
+                        const p = String(eventBar.profile_picture_url);
+                        apiImageUrl = cleanImageUrl(p.startsWith('http') ? p : (BG_BASE + (p.startsWith('/') ? '' : '/') + p));
+                    }
+
+                    venueById.set(id, {
+                        id,
+                        name: String(eventBar.name),
+                        cityState: [city, state].filter(Boolean).join(', '),
+                        apiImageUrl
+                    });
+                });
+
+                venues = Array.from(venueById.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+                await loadOverrides();
+                if (venues.length > 0) selectedVenueId = venues[0].id;
+                renderVenueList();
+                loadEditorFromSelected();
+                setStatus('Ready.', false);
+            } catch (err) {
+                setStatus('Failed to load admin data: ' + (err.message || 'unknown error'), true);
+            }
+        }
+
+        el.search.addEventListener('input', renderVenueList);
+        el.saveOverride.addEventListener('click', saveOverrideForSelected);
+        el.removeOverride.addEventListener('click', removeOverrideForSelected);
+        el.clearDraft.addEventListener('click', () => {
+            localStorage.removeItem(IMAGE_OVERRIDES_LOCAL_KEY);
+            overrides = { updatedAt: '', venues: {} };
+            renderJsonPreview();
+            renderVenueList();
+            loadEditorFromSelected();
+            setStatus('Cleared local draft. File-based overrides still load from image-overrides.json.', false);
+        });
+        el.exportJson.addEventListener('click', downloadOverridesFile);
+        el.importJson.addEventListener('change', handleImportFile);
+        el.uploadImageBtn.addEventListener('click', uploadSelectedImage);
+        el.imageFileInput.addEventListener('change', () => {
+            const file = el.imageFileInput.files && el.imageFileInput.files[0];
+            if (!file) {
+                el.uploadMeta.textContent = 'No file selected';
+                return;
+            }
+            const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+            el.uploadMeta.textContent = `${file.name} (${sizeMb} MB)`;
+        });
+
+        el.objectFit.addEventListener('change', () => {
+            el.finalPreview.style.objectFit = el.objectFit.value;
+        });
+        el.objectPosition.addEventListener('input', () => {
+            el.finalPreview.style.objectPosition = el.objectPosition.value || 'center center';
+        });
+        el.overrideUrl.addEventListener('input', () => {
+            const url = cleanImageUrl(el.overrideUrl.value);
+            const venue = getSelectedVenue();
+            el.finalPreview.src = url || (venue ? venue.apiImageUrl : '');
+        });
+
+        init();
+    </script>
+</body>
+</html>

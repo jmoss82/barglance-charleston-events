@@ -214,10 +214,14 @@
         let cardUpdateTimeout;
         let cardShowTimeout;
         let heroByBarId = {};   // bar id -> hero image URL (from bars API)
+        let imageOverridesByBarId = {}; // bar id -> image override settings
         let venueMarker = null; // Mapbox marker: hero image + venue name on map
+        let currentMarkerImageSrc = '';
         const CYCLE_DURATION = 12000; // 12 seconds per event
         const CARD_HIDE_DELAY = 250;
         const CARD_SHOW_DELAY = 200;
+        const IMAGE_OVERRIDES_PATH = 'image-overrides.json';
+        const IMAGE_OVERRIDES_LOCAL_KEY = 'barglanceImageOverridesDraft';
 
         // Reference location for distance (e.g. hotel); change to your lat/lng and label
         const REFERENCE_LOCATION = {
@@ -233,6 +237,66 @@
             const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c;
+        }
+
+        function cleanImageUrl(value) {
+            if (!value) return '';
+            const trimmed = String(value).trim();
+            if (!trimmed) return '';
+            return trimmed.replace(/^http:\/\//i, 'https://');
+        }
+
+        function normalizeOverrideMap(input) {
+            if (!input || typeof input !== 'object') return {};
+            const raw = input.venues && typeof input.venues === 'object' ? input.venues : input;
+            const out = {};
+            Object.keys(raw).forEach((key) => {
+                const item = raw[key];
+                if (!item || typeof item !== 'object') return;
+                const normalizedKey = String(key).trim();
+                if (!normalizedKey) return;
+                out[normalizedKey] = {
+                    imageUrl: cleanImageUrl(item.imageUrl || item.heroUrl || ''),
+                    objectFit: item.objectFit === 'contain' ? 'contain' : 'cover',
+                    objectPosition: item.objectPosition ? String(item.objectPosition).trim() : 'center center'
+                };
+            });
+            return out;
+        }
+
+        function getImageOverride(bar) {
+            if (!bar) return null;
+            const key = String(bar.id || '').trim();
+            if (!key) return null;
+            return imageOverridesByBarId[key] || null;
+        }
+
+        async function loadImageOverrides() {
+            let merged = {};
+            try {
+                const response = await fetch(IMAGE_OVERRIDES_PATH, { cache: 'no-store' });
+                if (response.ok) {
+                    const data = await response.json();
+                    merged = normalizeOverrideMap(data);
+                    console.log(`Loaded ${Object.keys(merged).length} image overrides from ${IMAGE_OVERRIDES_PATH}`);
+                }
+            } catch (error) {
+                console.log('No image-overrides.json found or failed to load. Continuing without file overrides.');
+            }
+
+            try {
+                const draftRaw = localStorage.getItem(IMAGE_OVERRIDES_LOCAL_KEY);
+                if (draftRaw) {
+                    const draft = JSON.parse(draftRaw);
+                    const draftMap = normalizeOverrideMap(draft);
+                    merged = { ...merged, ...draftMap };
+                    console.log(`Applied ${Object.keys(draftMap).length} local image override drafts`);
+                }
+            } catch (error) {
+                console.warn('Failed to parse local image override drafts:', error);
+            }
+
+            imageOverridesByBarId = merged;
         }
 
         // Initialize map (token from config.js or placeholder)
@@ -357,7 +421,7 @@
                 }
             });
 
-            loadEvents().then(() => loadBars()).then(() => {
+            loadEvents().then(() => loadBars()).then(() => loadImageOverrides()).then(() => {
                 hideLoading();
                 if (events.length > 0) {
                     ensureVenueMarker();
@@ -504,23 +568,43 @@
             const el = venueMarker.getElement();
             const img = el.querySelector('.venue-marker-img');
             const nameEl = el.querySelector('.venue-marker-name');
-            let heroUrl = heroByBarId[bar.id];
-            if (!heroUrl && bar.profile_picture_url) {
+            const override = getImageOverride(bar);
+            let heroUrl = override && override.imageUrl ? override.imageUrl : heroByBarId[bar.id];
+            let fallbackUrl = '';
+            if (bar.profile_picture_url) {
                 const p = bar.profile_picture_url;
-                heroUrl = p.startsWith('http') ? p : ('https://partner-api.barglance.com' + (p.startsWith('/') ? '' : '/') + p);
-                heroUrl = heroUrl.replace(/^http:\/\//i, 'https://');
+                fallbackUrl = p.startsWith('http') ? p : ('https://partner-api.barglance.com' + (p.startsWith('/') ? '' : '/') + p);
+                fallbackUrl = fallbackUrl.replace(/^http:\/\//i, 'https://');
+            }
+            if (!heroUrl) {
+                heroUrl = fallbackUrl;
             }
             if (Number.isFinite(lat) && Number.isFinite(lng)) {
                 venueMarker.setLngLat([lng, lat]);
                 venueMarker.addTo(map);
             }
             if (img) {
+                img.style.objectFit = (override && override.objectFit) ? override.objectFit : 'cover';
+                img.style.objectPosition = (override && override.objectPosition) ? override.objectPosition : 'center center';
                 if (heroUrl) {
-                    img.src = heroUrl;
+                    img.onerror = () => {
+                        if (fallbackUrl && img.src !== fallbackUrl) {
+                            img.src = fallbackUrl;
+                            return;
+                        }
+                        img.removeAttribute('src');
+                        img.classList.add('placeholder');
+                        currentMarkerImageSrc = '';
+                    };
+                    if (currentMarkerImageSrc !== heroUrl) {
+                        img.src = heroUrl;
+                        currentMarkerImageSrc = heroUrl;
+                    }
                     img.classList.remove('placeholder');
                 } else {
                     img.removeAttribute('src');
                     img.classList.add('placeholder');
+                    currentMarkerImageSrc = '';
                 }
             }
             if (nameEl) nameEl.textContent = bar.name || 'Venue';
