@@ -131,6 +131,34 @@
             100% { transform: rotate(360deg); }
         }
 
+        /* Venue hero image + name on map (above the label area) */
+        .venue-marker {
+            background: rgba(255, 255, 255, 0.96);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+            text-align: center;
+            pointer-events: none;
+        }
+        .venue-marker-img {
+            display: block;
+            width: 100px;
+            height: 64px;
+            object-fit: cover;
+        }
+        .venue-marker-img.placeholder {
+            background: #e5e7eb;
+            object-fit: none;
+        }
+        .venue-marker-name {
+            display: block;
+            padding: 4px 8px 6px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1a1a1a;
+            text-shadow: 0 0 1px #fff, 0 1px 2px rgba(255,255,255,0.8);
+        }
+
     </style>
 </head>
 <body>
@@ -185,6 +213,8 @@
         let cycleInterval;
         let cardUpdateTimeout;
         let cardShowTimeout;
+        let heroByBarId = {};   // bar id -> hero image URL (from bars API)
+        let venueMarker = null; // Mapbox marker: hero image + venue name on map
         const CYCLE_DURATION = 12000; // 12 seconds per event
         const CARD_HIDE_DELAY = 250;
         const CARD_SHOW_DELAY = 200;
@@ -327,9 +357,10 @@
                 }
             });
 
-            loadEvents().then(() => {
+            loadEvents().then(() => loadBars()).then(() => {
                 hideLoading();
                 if (events.length > 0) {
+                    ensureVenueMarker();
                     showEvent(0);
                     startCycling();
                 }
@@ -429,6 +460,65 @@
             console.log(`Updated events layer with ${features.length} locations`);
         }
 
+        async function loadBars() {
+            const apiKey = (window.MAP_CONFIG && window.MAP_CONFIG.barGlanceApiKey) || '';
+            let response;
+            try {
+                response = await fetch('/api/bars');
+            } catch (e) { response = null; }
+            if (!response || !response.ok) {
+                if (apiKey)
+                    response = await fetch('https://partner-api.barglance.com/api/v1/partner/bars', {
+                        headers: { 'Authorization': 'Bearer ' + apiKey }
+                    });
+            }
+            if (!response || !response.ok) return;
+            const data = await response.json();
+            const bars = data.bars || [];
+            const base = 'https://partner-api.barglance.com';
+            bars.forEach(b => {
+                if (b.id && b.images && b.images.hero) {
+                    const h = b.images.hero;
+                    heroByBarId[b.id] = h.startsWith('http') ? h : (base + (h.startsWith('/') ? '' : '/') + h);
+                }
+            });
+        }
+
+        function ensureVenueMarker() {
+            if (venueMarker) return;
+            const el = document.createElement('div');
+            el.className = 'venue-marker';
+            el.innerHTML = '<img class="venue-marker-img placeholder" alt="" /><span class="venue-marker-name"></span>';
+            venueMarker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+                .setLngLat([0, 0])
+                .addTo(map);
+        }
+
+        function updateVenueMarker(event) {
+            if (!venueMarker || !event || !event.bar) return;
+            const bar = event.bar;
+            const lat = Number(bar.latitude);
+            const lng = Number(bar.longitude);
+            const el = venueMarker.getElement();
+            const img = el.querySelector('.venue-marker-img');
+            const nameEl = el.querySelector('.venue-marker-name');
+            const heroUrl = heroByBarId[bar.id];
+            if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                venueMarker.setLngLat([lng, lat]);
+                venueMarker.addTo(map);
+            }
+            if (img) {
+                if (heroUrl) {
+                    img.src = heroUrl;
+                    img.classList.remove('placeholder');
+                } else {
+                    img.removeAttribute('src');
+                    img.classList.add('placeholder');
+                }
+            }
+            if (nameEl) nameEl.textContent = bar.name || 'Venue';
+        }
+
         function setActiveEventFilter(index) {
             if (!map.getLayer('event-label')) return;
             map.setFilter('event-label', ['==', ['get', 'index'], index]);
@@ -450,7 +540,13 @@
             const card = document.getElementById('eventCard');
             card.classList.remove('visible');
 
-            setActiveEventFilter(index);
+            // Show hero image + name in marker; hide the symbol-layer name so it's not duplicated
+            if (venueMarker) {
+                updateVenueMarker(event);
+                if (map.getLayer('event-label')) map.setFilter('event-label', ['==', ['get', 'index'], -999]);
+            } else {
+                setActiveEventFilter(index);
+            }
 
             // Fly to event location
             const latitude = Number(event?.bar?.latitude);

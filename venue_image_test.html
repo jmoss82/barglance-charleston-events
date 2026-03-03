@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>BarGlance Venue Image Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="config.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #111827;
+            color: #e5e7eb;
+        }
+
+        h1 {
+            font-size: 26px;
+            margin-bottom: 4px;
+        }
+
+        h2 {
+            font-size: 20px;
+            margin-top: 24px;
+            margin-bottom: 8px;
+        }
+
+        .card {
+            background: #020617;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.65);
+            max-width: 1000px;
+        }
+
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 12px;
+        }
+
+        .panel {
+            flex: 1 1 280px;
+            background: #030712;
+            border-radius: 12px;
+            padding: 14px;
+            border: 1px solid #1f2937;
+        }
+
+        .panel h3 {
+            font-size: 16px;
+            margin: 0 0 8px 0;
+        }
+
+        img {
+            max-width: 100%;
+            border-radius: 10px;
+            display: block;
+        }
+
+        .meta {
+            font-size: 13px;
+            color: #9ca3af;
+            margin-top: 6px;
+            word-break: break-all;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            background: #111827;
+            border: 1px solid #1f2937;
+            color: #e5e7eb;
+        }
+
+        .status {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #9ca3af;
+        }
+
+        .error {
+            color: #fecaca;
+        }
+
+        .search-box {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .search-box input {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #374151;
+            background: #111827;
+            color: #e5e7eb;
+            font-size: 14px;
+            min-width: 200px;
+        }
+        .search-box button {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid #374151;
+            background: #1f2937;
+            color: #e5e7eb;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .search-box button:hover { background: #374151; }
+        .venue-list {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #9ca3af;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .venue-list span { display: block; padding: 2px 0; }
+    </style>
+</head>
+<body>
+    <h1>BarGlance Venue Image Test</h1>
+    <div class="status" id="status">Loading…</div>
+    <div class="search-box" id="searchBox" style="display:none;">
+        <input type="text" id="searchInput" placeholder="Search venue name (e.g. Refinery, Halls, Republic)" />
+        <button type="button" id="searchBtn">Search</button>
+    </div>
+    <div class="venue-list" id="venueList"></div>
+
+    <div class="card" id="content" style="margin-top: 18px; display:none;">
+        <div>
+            <span class="tag" id="venueTag"></span>
+        </div>
+        <h2 id="venueName">Venue name</h2>
+        <div class="meta" id="venueMeta"></div>
+
+        <div class="row">
+            <div class="panel">
+                <h3>Venue profile image (`images.profile`)</h3>
+                <img id="profileImg" alt="Profile image" />
+                <div class="meta" id="profileMeta"></div>
+            </div>
+            <div class="panel">
+                <h3>Venue hero / cover (`images.hero`)</h3>
+                <img id="heroImg" alt="Hero image" />
+                <div class="meta" id="heroMeta"></div>
+            </div>
+            <div class="panel">
+                <h3>Event venue image (`bar.profile_picture_url`)</h3>
+                <img id="eventImg" alt="Event venue image" />
+                <div class="meta" id="eventMeta"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchJson(url, apiKey) {
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': 'Bearer ' + apiKey
+                }
+            });
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status + ' for ' + url);
+            }
+            return response.json();
+        }
+
+        let allBars = [];
+
+        async function loadVenueImages(searchTerm) {
+            const statusEl = document.getElementById('status');
+            const contentEl = document.getElementById('content');
+            const searchBox = document.getElementById('searchBox');
+            const venueListEl = document.getElementById('venueList');
+            const term = (searchTerm || '').trim().toLowerCase();
+
+            const apiKey = window.MAP_CONFIG && window.MAP_CONFIG.barGlanceApiKey;
+            if (!apiKey) {
+                statusEl.innerHTML = '<span class="error">Missing BarGlance API key. Set barGlanceApiKey in config.js.</span>';
+                return;
+            }
+
+            try {
+                if (allBars.length === 0) {
+                    statusEl.textContent = 'Fetching venues from BarGlance…';
+                    const barsData = await fetchJson('https://partner-api.barglance.com/api/v1/partner/bars', apiKey);
+                    allBars = barsData.bars || [];
+                }
+
+                const bars = allBars;
+                searchBox.style.display = 'flex';
+                venueListEl.innerHTML = '';
+
+                const matches = term
+                    ? bars.filter(b => typeof b.name === 'string' && b.name.toLowerCase().includes(term))
+                    : bars.filter(b => typeof b.name === 'string');
+
+                if (matches.length === 0) {
+                    statusEl.innerHTML = `<span class="error">No venue name containing "${(searchTerm || '').trim() || '…'}" in bars list. Loaded ${bars.length} venues. Try another search below.</span>`;
+                    venueListEl.innerHTML = '<strong>Venues in list (first 50):</strong><br>' +
+                        bars.slice(0, 50).map(b => b.name || '(no name)').join('<br>');
+                    if (bars.length > 50) venueListEl.innerHTML += `<br>… and ${bars.length - 50} more`;
+                    contentEl.style.display = 'none';
+                    return;
+                }
+
+                const venue = matches[0];
+
+                document.getElementById('venueTag').textContent =
+                    `${matches.length} match${matches.length === 1 ? '' : 'es'} for "${term || 'all'}"`;
+                document.getElementById('venueName').textContent = venue.name || 'Unknown venue';
+                document.getElementById('venueMeta').textContent =
+                    `${venue.address || ''} • ${venue.city || ''}, ${venue.state || ''} • id=${venue.id}`;
+
+                // Profile / hero from bars endpoint
+                const profileUrl = venue.images && venue.images.profile;
+                const heroUrl = venue.images && venue.images.hero;
+
+                const profileImg = document.getElementById('profileImg');
+                const heroImg = document.getElementById('heroImg');
+                const profileMeta = document.getElementById('profileMeta');
+                const heroMeta = document.getElementById('heroMeta');
+
+                if (profileUrl) {
+                    profileImg.src = profileUrl;
+                    profileMeta.textContent = profileUrl;
+                } else {
+                    profileImg.style.display = 'none';
+                    profileMeta.textContent = 'images.profile is null / not set.';
+                }
+
+                if (heroUrl) {
+                    heroImg.src = heroUrl;
+                    heroMeta.textContent = heroUrl;
+                } else {
+                    heroImg.style.display = 'none';
+                    heroMeta.textContent = 'images.hero is null / not set.';
+                }
+
+                // Load events for this venue to get bar.profile_picture_url
+                statusEl.textContent = 'Fetching events for this venue…';
+
+                const city = venue.city;
+                const state = venue.state;
+
+                let eventImageUrl = '';
+
+                if (city && state) {
+                    try {
+                        const eventsUrl = `https://partner-api.barglance.com/api/v1/partner/events/${encodeURIComponent(state)}/${encodeURIComponent(city)}`;
+                        const eventsData = await fetchJson(eventsUrl, apiKey);
+                        const events = eventsData.events || [];
+                        const eventMatch = events.find(ev => ev.bar && ev.bar.id === venue.id);
+
+                        if (eventMatch && eventMatch.bar && eventMatch.bar.profile_picture_url) {
+                            const path = eventMatch.bar.profile_picture_url;
+                            // If the API returns a relative path, prefix with the API host
+                            eventImageUrl = path.startsWith('http') ? path : `https://partner-api.barglance.com${path}`;
+                        }
+                    } catch (err) {
+                        console.error('Error fetching events for venue', err);
+                    }
+                }
+
+                const eventImg = document.getElementById('eventImg');
+                const eventMeta = document.getElementById('eventMeta');
+
+                if (eventImageUrl) {
+                    eventImg.src = eventImageUrl;
+                    eventMeta.textContent = eventImageUrl;
+                } else {
+                    eventImg.style.display = 'none';
+                    eventMeta.textContent = 'No event with bar.profile_picture_url found for this venue in the current event feed.';
+                }
+
+                statusEl.textContent = 'Loaded venue and image details.';
+                contentEl.style.display = 'block';
+            } catch (err) {
+                console.error(err);
+                statusEl.innerHTML = `<span class="error">Failed to load data from BarGlance: ${err.message}</span>`;
+            }
+        }
+
+        document.getElementById('searchBtn').addEventListener('click', () => {
+            loadVenueImages(document.getElementById('searchInput').value);
+        });
+        document.getElementById('searchInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') loadVenueImages(e.target.value);
+        });
+        loadVenueImages('Refinery');
+    </script>
+</body>
+</html>
+
