@@ -478,8 +478,9 @@
             const base = 'https://partner-api.barglance.com';
             bars.forEach(b => {
                 if (b.id && b.images && b.images.hero) {
-                    const h = b.images.hero;
-                    heroByBarId[b.id] = h.startsWith('http') ? h : (base + (h.startsWith('/') ? '' : '/') + h);
+                    let h = b.images.hero;
+                    h = h.startsWith('http') ? h : (base + (h.startsWith('/') ? '' : '/') + h);
+                    heroByBarId[b.id] = h.replace(/^http:\/\//i, 'https://');
                 }
             });
         }
@@ -503,7 +504,12 @@
             const el = venueMarker.getElement();
             const img = el.querySelector('.venue-marker-img');
             const nameEl = el.querySelector('.venue-marker-name');
-            const heroUrl = heroByBarId[bar.id];
+            let heroUrl = heroByBarId[bar.id];
+            if (!heroUrl && bar.profile_picture_url) {
+                const p = bar.profile_picture_url;
+                heroUrl = p.startsWith('http') ? p : ('https://partner-api.barglance.com' + (p.startsWith('/') ? '' : '/') + p);
+                heroUrl = heroUrl.replace(/^http:\/\//i, 'https://');
+            }
             if (Number.isFinite(lat) && Number.isFinite(lng)) {
                 venueMarker.setLngLat([lng, lat]);
                 venueMarker.addTo(map);
