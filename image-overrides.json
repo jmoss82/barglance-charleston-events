@@ -1,4 +1,11 @@
 {
-  "updatedAt": "",
-  "venues": {}
+  "updatedAt": "2026-03-03T00:00:00.000Z",
+  "venues": {
+    "1264c477-f9be-4a0a-9428-9895a1040da8": {
+      "imageUrl": "https://lh3.googleusercontent.com/gps-cs-s/AHVAweqfIL0UrKFMETkknwfTE0PacDdwoaSjE9wJAfs3PdAp13hih0gTwkW0uExbHJyBZZnAm_SHeRz23Wbbw7m9FqIrzmtb-5ipi-HT9UEBM9jRiMdOl7K30-aIZNLmHIT-OMVsBmgZ=s680-w680-h510-rw",
+      "objectFit": "cover",
+      "objectPosition": "center center",
+      "notes": "Beer Works override"
+    }
+  }
 }
